@@ -306,7 +306,7 @@ dotnet-rag-api/
 ### Phase 1: Foundation & Production Readiness
 - [x] Global exception handling middleware
 - [x] Request/response logging
-- [ ] Persistent document storage (SQLite + EF Core)
+- [x] Persistent document storage (SQLite + EF Core)
 - [ ] Real health checks (Qdrant + Ollama connectivity)
 - [ ] Unit & integration tests
 

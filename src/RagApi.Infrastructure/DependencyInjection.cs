@@ -1,8 +1,10 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RagApi.Application.Interfaces;
 using RagApi.Application.Services;
 using RagApi.Infrastructure.AI;
+using RagApi.Infrastructure.Data;
 using RagApi.Infrastructure.DocumentProcessing;
 using RagApi.Infrastructure.VectorStore;
 
@@ -38,6 +40,11 @@ public static class DependencyInjection
 
         // Register document processor
         services.AddSingleton<IDocumentProcessor, DocumentProcessor>();
+
+        // Argha - 2026-02-15 - SQLite persistent document storage (Phase 1.3)
+        var connectionString = configuration.GetConnectionString("DefaultConnection") ?? "Data Source=ragapi.db";
+        services.AddDbContext<RagApiDbContext>(options => options.UseSqlite(connectionString));
+        services.AddScoped<IDocumentRepository, DocumentRepository>();
 
         // Register application services
         services.AddScoped<RagService>();

@@ -72,3 +72,6 @@ CLAUDE.md
 
 # Test files
 test-sample.txt
+
+# SQLite database
+*.db

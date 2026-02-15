@@ -1,6 +1,8 @@
+using Microsoft.EntityFrameworkCore;
 using RagApi.Api.Middleware;
 using RagApi.Application.Interfaces;
 using RagApi.Infrastructure;
+using RagApi.Infrastructure.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,6 +46,10 @@ using (var scope = app.Services.CreateScope())
 {
     var vectorStore = scope.ServiceProvider.GetRequiredService<IVectorStore>();
     await vectorStore.InitializeAsync();
+
+    // Argha - 2026-02-15 - Create SQLite database if it doesn't exist (Phase 1.3)
+    var dbContext = scope.ServiceProvider.GetRequiredService<RagApiDbContext>();
+    await dbContext.Database.EnsureCreatedAsync();
 }
 
 // Argha - 2026-02-15 - Global exception handling — must be first in pipeline

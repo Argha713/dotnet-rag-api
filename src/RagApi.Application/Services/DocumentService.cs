@@ -1,7 +1,8 @@
 using RagApi.Application.Interfaces;
 using RagApi.Domain.Entities;
 using Microsoft.Extensions.Logging;
-using System.Collections.Concurrent;
+// Argha - 2026-02-15 - Commented out: replaced in-memory storage with IDocumentRepository (Phase 1.3)
+// using System.Collections.Concurrent;
 
 namespace RagApi.Application.Services;
 
@@ -14,20 +15,23 @@ public class DocumentService
     private readonly IEmbeddingService _embeddingService;
     private readonly IVectorStore _vectorStore;
     private readonly ILogger<DocumentService> _logger;
-    
-    // In-memory document store (replace with database in production)
-    private static readonly ConcurrentDictionary<Guid, Document> _documents = new();
+    private readonly IDocumentRepository _documentRepository;
+
+    // Argha - 2026-02-15 - Commented out: replaced with SQLite via IDocumentRepository (Phase 1.3)
+    // private static readonly ConcurrentDictionary<Guid, Document> _documents = new();
 
     public DocumentService(
         IDocumentProcessor documentProcessor,
         IEmbeddingService embeddingService,
         IVectorStore vectorStore,
-        ILogger<DocumentService> logger)
+        ILogger<DocumentService> logger,
+        IDocumentRepository documentRepository)
     {
         _documentProcessor = documentProcessor;
         _embeddingService = embeddingService;
         _vectorStore = vectorStore;
         _logger = logger;
+        _documentRepository = documentRepository;
     }
 
     /// <summary>
@@ -56,7 +60,9 @@ public class DocumentService
             FileSize = fileStream.Length,
             Status = DocumentStatus.Processing
         };
-        _documents[document.Id] = document;
+        // Argha - 2026-02-15 - Commented out: was in-memory storage (Phase 1.3)
+        // _documents[document.Id] = document;
+        await _documentRepository.AddAsync(document, cancellationToken);
 
         try
         {
@@ -93,7 +99,8 @@ public class DocumentService
             // Update document status
             document.Status = DocumentStatus.Completed;
             document.ChunkCount = chunks.Count;
-            
+            await _documentRepository.UpdateAsync(document, cancellationToken);
+
             _logger.LogInformation(
                 "Document {DocumentId} processed successfully. {ChunkCount} chunks stored.",
                 document.Id, chunks.Count);
@@ -105,6 +112,7 @@ public class DocumentService
             _logger.LogError(ex, "Failed to process document {DocumentId}", document.Id);
             document.Status = DocumentStatus.Failed;
             document.ErrorMessage = ex.Message;
+            await _documentRepository.UpdateAsync(document, cancellationToken);
             throw;
         }
     }
@@ -112,18 +120,22 @@ public class DocumentService
     /// <summary>
     /// Get document by ID
     /// </summary>
-    public Task<Document?> GetDocumentAsync(Guid documentId)
+    public async Task<Document?> GetDocumentAsync(Guid documentId, CancellationToken cancellationToken = default)
     {
-        _documents.TryGetValue(documentId, out var document);
-        return Task.FromResult(document);
+        // Argha - 2026-02-15 - Commented out: was in-memory lookup (Phase 1.3)
+        // _documents.TryGetValue(documentId, out var document);
+        // return Task.FromResult(document);
+        return await _documentRepository.GetByIdAsync(documentId, cancellationToken);
     }
 
     /// <summary>
     /// Get all documents
     /// </summary>
-    public Task<List<Document>> GetAllDocumentsAsync()
+    public async Task<List<Document>> GetAllDocumentsAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(_documents.Values.ToList());
+        // Argha - 2026-02-15 - Commented out: was in-memory list (Phase 1.3)
+        // return Task.FromResult(_documents.Values.ToList());
+        return await _documentRepository.GetAllAsync(cancellationToken);
     }
 
     /// <summary>
@@ -136,9 +148,10 @@ public class DocumentService
         // Remove chunks from vector store
         await _vectorStore.DeleteDocumentChunksAsync(documentId, cancellationToken);
 
-        // Remove document record
-        _documents.TryRemove(documentId, out _);
-        
+        // Argha - 2026-02-15 - Commented out: was in-memory removal (Phase 1.3)
+        // _documents.TryRemove(documentId, out _);
+        await _documentRepository.DeleteAsync(documentId, cancellationToken);
+
         _logger.LogInformation("Document {DocumentId} deleted successfully", documentId);
     }
 
