@@ -49,6 +49,9 @@ using (var scope = app.Services.CreateScope())
 // Argha - 2026-02-15 - Global exception handling — must be first in pipeline
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
+// Argha - 2026-02-15 - Log method, path, status code, and elapsed time for every request
+app.UseMiddleware<RequestLoggingMiddleware>();
+
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
