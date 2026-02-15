@@ -17,6 +17,11 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **.NE
 - **RAG-powered chat** — Get AI answers grounded in your documents
 - **Source citations** — Every answer includes references to source documents
 - **Dual AI provider support** — Ollama (local) or Azure OpenAI (cloud)
+- **Persistent storage** — SQLite + EF Core for document metadata
+- **Real health checks** — Per-dependency status for Qdrant, Ollama, and SQLite
+- **Global error handling** — Exception middleware with structured JSON error responses
+- **Request logging** — Method, path, status code, and elapsed time for every request
+- **68 unit tests** — xUnit + Moq + FluentAssertions covering all layers
 - **Docker-ready** — One command to spin up all dependencies
 - **Swagger UI** — Interactive API documentation at the root URL
 
@@ -98,7 +103,7 @@ Navigate to **http://localhost:5000** in your browser to explore the API interac
 ### Verify Everything is Working
 
 ```bash
-# Health check — should return {"status":"healthy"}
+# Health check — returns per-dependency status (Qdrant, Ollama, SQLite)
 curl http://localhost:5000/api/system/health
 
 # System stats — shows connected models and vector store
@@ -266,6 +271,8 @@ Qdrant__Port=6334
 | **Vector DB** | Qdrant |
 | **PDF Parsing** | PdfPig |
 | **DOCX Parsing** | DocumentFormat.OpenXml |
+| **Database** | SQLite + Entity Framework Core |
+| **Testing** | xUnit, Moq, FluentAssertions |
 | **API Docs** | Swagger / OpenAPI |
 
 ---
@@ -307,8 +314,8 @@ dotnet-rag-api/
 - [x] Global exception handling middleware
 - [x] Request/response logging
 - [x] Persistent document storage (SQLite + EF Core)
-- [ ] Real health checks (Qdrant + Ollama connectivity)
-- [ ] Unit & integration tests
+- [x] Real health checks (Qdrant, Ollama, SQLite)
+- [x] Unit tests (68 tests — xUnit + Moq + FluentAssertions)
 
 ### Phase 2: Core Features
 - [ ] Streaming chat responses (SSE)
