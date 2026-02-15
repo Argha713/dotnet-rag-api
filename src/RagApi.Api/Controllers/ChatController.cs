@@ -14,12 +14,10 @@ namespace RagApi.Api.Controllers;
 public class ChatController : ControllerBase
 {
     private readonly RagService _ragService;
-    private readonly ILogger<ChatController> _logger;
 
-    public ChatController(RagService ragService, ILogger<ChatController> logger)
+    public ChatController(RagService ragService)
     {
         _ragService = ragService;
-        _logger = logger;
     }
 
     /// <summary>
@@ -37,44 +35,36 @@ public class ChatController : ControllerBase
             return BadRequest(ModelState);
         }
 
-        try
+        // Convert conversation history if provided
+        List<ChatMessage>? history = null;
+        if (request.ConversationHistory?.Count > 0)
         {
-            // Convert conversation history if provided
-            List<ChatMessage>? history = null;
-            if (request.ConversationHistory?.Count > 0)
-            {
-                history = request.ConversationHistory
-                    .Select(m => new ChatMessage { Role = m.Role, Content = m.Content })
-                    .ToList();
-            }
-
-            var response = await _ragService.ChatAsync(
-                request.Query,
-                history,
-                request.TopK,
-                request.DocumentId,
-                cancellationToken);
-
-            var dto = new ChatResponseDto
-            {
-                Answer = response.Answer,
-                Model = response.Model,
-                Sources = response.Sources.Select(s => new SourceDto
-                {
-                    DocumentId = s.DocumentId,
-                    FileName = s.FileName,
-                    RelevantText = s.RelevantText,
-                    RelevanceScore = s.RelevanceScore
-                }).ToList()
-            };
-
-            return Ok(dto);
+            history = request.ConversationHistory
+                .Select(m => new ChatMessage { Role = m.Role, Content = m.Content })
+                .ToList();
         }
-        catch (Exception ex)
+
+        var response = await _ragService.ChatAsync(
+            request.Query,
+            history,
+            request.TopK,
+            request.DocumentId,
+            cancellationToken);
+
+        var dto = new ChatResponseDto
         {
-            _logger.LogError(ex, "Failed to process chat request");
-            return BadRequest(new { error = ex.Message });
-        }
+            Answer = response.Answer,
+            Model = response.Model,
+            Sources = response.Sources.Select(s => new SourceDto
+            {
+                DocumentId = s.DocumentId,
+                FileName = s.FileName,
+                RelevantText = s.RelevantText,
+                RelevanceScore = s.RelevanceScore
+            }).ToList()
+        };
+
+        return Ok(dto);
     }
 
     /// <summary>
@@ -92,30 +82,22 @@ public class ChatController : ControllerBase
             return BadRequest(ModelState);
         }
 
-        try
-        {
-            var results = await _ragService.SearchAsync(
-                request.Query,
-                request.TopK,
-                request.DocumentId,
-                cancellationToken);
+        var results = await _ragService.SearchAsync(
+            request.Query,
+            request.TopK,
+            request.DocumentId,
+            cancellationToken);
 
-            var dtos = results.Select(r => new SearchResultDto
-            {
-                ChunkId = r.ChunkId,
-                DocumentId = r.DocumentId,
-                FileName = r.FileName,
-                Content = r.Content,
-                Score = r.Score,
-                ChunkIndex = r.ChunkIndex
-            }).ToList();
-
-            return Ok(dtos);
-        }
-        catch (Exception ex)
+        var dtos = results.Select(r => new SearchResultDto
         {
-            _logger.LogError(ex, "Failed to process search request");
-            return BadRequest(new { error = ex.Message });
-        }
+            ChunkId = r.ChunkId,
+            DocumentId = r.DocumentId,
+            FileName = r.FileName,
+            Content = r.Content,
+            Score = r.Score,
+            ChunkIndex = r.ChunkIndex
+        }).ToList();
+
+        return Ok(dtos);
     }
 }

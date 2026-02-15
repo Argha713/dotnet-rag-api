@@ -35,7 +35,7 @@ public class SystemController : ControllerBase
         _chatService = chatService;
         _documentService = documentService;
         _aiConfig = aiConfig.Value;
-        _logger = logger;
+        _logger = logger; // Argha - 2026-02-15 - Kept for intentional graceful degradation in GetStats
     }
 
     /// <summary>

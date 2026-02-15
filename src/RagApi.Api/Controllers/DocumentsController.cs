@@ -13,12 +13,10 @@ namespace RagApi.Api.Controllers;
 public class DocumentsController : ControllerBase
 {
     private readonly DocumentService _documentService;
-    private readonly ILogger<DocumentsController> _logger;
 
-    public DocumentsController(DocumentService documentService, ILogger<DocumentsController> logger)
+    public DocumentsController(DocumentService documentService)
     {
         _documentService = documentService;
-        _logger = logger;
     }
 
     /// <summary>
@@ -38,27 +36,15 @@ public class DocumentsController : ControllerBase
             return BadRequest(new { error = "No file provided" });
         }
 
-        try
-        {
-            await using var stream = file.OpenReadStream();
-            var document = await _documentService.UploadDocumentAsync(
-                stream,
-                file.FileName,
-                file.ContentType,
-                cancellationToken);
+        await using var stream = file.OpenReadStream();
+        var document = await _documentService.UploadDocumentAsync(
+            stream,
+            file.FileName,
+            file.ContentType,
+            cancellationToken);
 
-            var dto = MapToDto(document);
-            return CreatedAtAction(nameof(GetDocument), new { id = document.Id }, dto);
-        }
-        catch (NotSupportedException ex)
-        {
-            return StatusCode(StatusCodes.Status415UnsupportedMediaType, new { error = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to upload document");
-            return BadRequest(new { error = ex.Message });
-        }
+        var dto = MapToDto(document);
+        return CreatedAtAction(nameof(GetDocument), new { id = document.Id }, dto);
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using RagApi.Api.Middleware;
 using RagApi.Application.Interfaces;
 using RagApi.Infrastructure;
 
@@ -44,6 +45,9 @@ using (var scope = app.Services.CreateScope())
     var vectorStore = scope.ServiceProvider.GetRequiredService<IVectorStore>();
     await vectorStore.InitializeAsync();
 }
+
+// Argha - 2026-02-15 - Global exception handling — must be first in pipeline
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
