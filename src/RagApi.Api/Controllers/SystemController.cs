@@ -38,20 +38,7 @@ public class SystemController : ControllerBase
         _logger = logger; // Argha - 2026-02-15 - Kept for intentional graceful degradation in GetStats
     }
 
-    /// <summary>
-    /// Health check endpoint
-    /// </summary>
-    [HttpGet("health")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    public IActionResult Health()
-    {
-        return Ok(new 
-        { 
-            status = "healthy", 
-            timestamp = DateTime.UtcNow,
-            provider = _aiConfig.Provider
-        });
-    }
+    // Health check endpoint moved to MapHealthChecks("/api/system/health") in Program.cs (Phase 1.4)
 
     /// <summary>
     /// Get system statistics

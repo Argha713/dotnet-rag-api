@@ -6,6 +6,7 @@ using RagApi.Application.Services;
 using RagApi.Infrastructure.AI;
 using RagApi.Infrastructure.Data;
 using RagApi.Infrastructure.DocumentProcessing;
+using RagApi.Infrastructure.HealthChecks;
 using RagApi.Infrastructure.VectorStore;
 
 namespace RagApi.Infrastructure;
@@ -49,6 +50,20 @@ public static class DependencyInjection
         // Register application services
         services.AddScoped<RagService>();
         services.AddScoped<DocumentService>();
+
+        // Argha - 2026-02-15 - Real health checks for all dependencies (Phase 1.4)
+        var healthChecks = services.AddHealthChecks()
+            .AddCheck<QdrantHealthCheck>("qdrant", tags: ["dependency"])
+            .AddCheck<SqliteHealthCheck>("sqlite", tags: ["dependency"]);
+
+        if (aiConfig.Provider.Equals("AzureOpenAI", StringComparison.OrdinalIgnoreCase))
+        {
+            // Azure OpenAI health check can be added in a future phase
+        }
+        else
+        {
+            healthChecks.AddCheck<OllamaHealthCheck>("ollama", tags: ["dependency"]);
+        }
 
         return services;
     }
