@@ -13,11 +13,13 @@ using RagApi.Domain.Entities;
 namespace RagApi.Tests.Unit.Api;
 
 // Argha - 2026-02-15 - Unit tests for ChatController endpoints (Phase 1.5)
+// Argha - 2026-02-19 - Extended with session-based chat tests (Phase 2.2)
 public class ChatControllerTests
 {
     private readonly Mock<IVectorStore> _vectorStoreMock;
     private readonly Mock<IEmbeddingService> _embeddingMock;
     private readonly Mock<IChatService> _chatMock;
+    private readonly Mock<IConversationRepository> _conversationRepoMock;
     private readonly ChatController _sut;
 
     private static readonly float[] TestEmbedding = new float[768];
@@ -27,6 +29,7 @@ public class ChatControllerTests
         _vectorStoreMock = new Mock<IVectorStore>();
         _embeddingMock = new Mock<IEmbeddingService>();
         _chatMock = new Mock<IChatService>();
+        _conversationRepoMock = new Mock<IConversationRepository>();
 
         _embeddingMock.Setup(e => e.GenerateEmbeddingAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(TestEmbedding);
@@ -39,7 +42,12 @@ public class ChatControllerTests
             _chatMock.Object,
             Mock.Of<ILogger<RagService>>());
 
-        _sut = new ChatController(ragService);
+        // Argha - 2026-02-19 - Real ConversationService with mocked repository (Phase 2.2)
+        var conversationService = new ConversationService(
+            _conversationRepoMock.Object,
+            Mock.Of<ILogger<ConversationService>>());
+
+        _sut = new ChatController(ragService, conversationService);
     }
 
     [Fact]
@@ -130,6 +138,91 @@ public class ChatControllerTests
 
         // Assert
         _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, docId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // Argha - 2026-02-19 - Session-based chat tests (Phase 2.2)
+
+    [Fact]
+    public async Task Chat_WithSessionId_LoadsHistoryFromSession()
+    {
+        // Arrange
+        var sessionId = Guid.NewGuid();
+        var existingSession = new ConversationSession
+        {
+            Id = sessionId,
+            MessagesJson = System.Text.Json.JsonSerializer.Serialize(new List<ChatMessage>
+            {
+                new() { Role = "user", Content = "Previous question" },
+                new() { Role = "assistant", Content = "Previous answer" }
+            })
+        };
+        _conversationRepoMock.Setup(r => r.GetAsync(sessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingSession);
+        _conversationRepoMock.Setup(r => r.AppendMessagesAsync(
+                sessionId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var searchResults = new List<SearchResult>
+        {
+            new() { ChunkId = Guid.NewGuid(), DocumentId = Guid.NewGuid(), FileName = "doc.txt", Content = "content", Score = 0.9, ChunkIndex = 0 }
+        };
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(searchResults);
+        _chatMock.Setup(c => c.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("New answer");
+
+        // Act
+        var result = await _sut.Chat(new ChatRequest { Query = "New question", SessionId = sessionId }, CancellationToken.None);
+
+        // Assert
+        result.Should().BeOfType<OkObjectResult>();
+        _chatMock.Verify(c => c.GenerateResponseAsync(
+            It.IsAny<string>(),
+            It.Is<List<ChatMessage>>(msgs => msgs.Any(m => m.Content == "Previous question")),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Chat_WithSessionId_AppendsMessagesToSession()
+    {
+        // Arrange
+        var sessionId = Guid.NewGuid();
+        _conversationRepoMock.Setup(r => r.GetAsync(sessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ConversationSession { Id = sessionId, MessagesJson = "[]" });
+        _conversationRepoMock.Setup(r => r.AppendMessagesAsync(
+                sessionId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var searchResults = new List<SearchResult>
+        {
+            new() { ChunkId = Guid.NewGuid(), DocumentId = Guid.NewGuid(), FileName = "doc.txt", Content = "content", Score = 0.9, ChunkIndex = 0 }
+        };
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(searchResults);
+        _chatMock.Setup(c => c.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("The answer");
+
+        // Act
+        await _sut.Chat(new ChatRequest { Query = "My question", SessionId = sessionId }, CancellationToken.None);
+
+        // Assert
+        _conversationRepoMock.Verify(r => r.AppendMessagesAsync(
+            sessionId, "My question", "The answer", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Chat_WithInvalidSessionId_Returns404()
+    {
+        // Arrange
+        var sessionId = Guid.NewGuid();
+        _conversationRepoMock.Setup(r => r.GetAsync(sessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ConversationSession?)null);
+
+        // Act
+        var result = await _sut.Chat(new ChatRequest { Query = "question", SessionId = sessionId }, CancellationToken.None);
+
+        // Assert
+        result.Should().BeOfType<NotFoundObjectResult>();
     }
 
     // Argha - 2026-02-19 - Streaming endpoint tests (Phase 2.1)

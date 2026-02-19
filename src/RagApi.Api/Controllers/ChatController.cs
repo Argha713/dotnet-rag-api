@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,10 +17,13 @@ namespace RagApi.Api.Controllers;
 public class ChatController : ControllerBase
 {
     private readonly RagService _ragService;
+    private readonly ConversationService _conversationService;
 
-    public ChatController(RagService ragService)
+    // Argha - 2026-02-19 - Injected ConversationService for server-side session support (Phase 2.2)
+    public ChatController(RagService ragService, ConversationService conversationService)
     {
         _ragService = ragService;
+        _conversationService = conversationService;
     }
 
     /// <summary>
@@ -37,13 +41,19 @@ public class ChatController : ControllerBase
             return BadRequest(ModelState);
         }
 
-        // Convert conversation history if provided
-        List<ChatMessage>? history = null;
-        if (request.ConversationHistory?.Count > 0)
+        // Argha - 2026-02-19 - SessionId takes precedence over ConversationHistory (Phase 2.2)
+        List<ChatMessage>? history;
+        if (request.SessionId.HasValue)
         {
-            history = request.ConversationHistory
-                .Select(m => new ChatMessage { Role = m.Role, Content = m.Content })
-                .ToList();
+            history = await _conversationService.GetHistoryAsync(request.SessionId.Value, cancellationToken);
+            if (history == null)
+                return NotFound($"Session {request.SessionId.Value} not found.");
+        }
+        else
+        {
+            history = request.ConversationHistory?.Count > 0
+                ? request.ConversationHistory.Select(m => new ChatMessage { Role = m.Role, Content = m.Content }).ToList()
+                : null;
         }
 
         var response = await _ragService.ChatAsync(
@@ -52,6 +62,13 @@ public class ChatController : ControllerBase
             request.TopK,
             request.DocumentId,
             cancellationToken);
+
+        // Argha - 2026-02-19 - Persist turn to session if SessionId was provided (Phase 2.2)
+        if (request.SessionId.HasValue)
+        {
+            await _conversationService.AppendMessagesAsync(
+                request.SessionId.Value, request.Query, response.Answer, cancellationToken);
+        }
 
         var dto = new ChatResponseDto
         {
@@ -88,19 +105,28 @@ public class ChatController : ControllerBase
             return;
         }
 
+        // Argha - 2026-02-19 - Resolve session history before setting SSE headers so we can still return 404 (Phase 2.2)
+        List<ChatMessage>? history;
+        if (request.SessionId.HasValue)
+        {
+            history = await _conversationService.GetHistoryAsync(request.SessionId.Value, cancellationToken);
+            if (history == null)
+            {
+                Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            }
+        }
+        else
+        {
+            history = request.ConversationHistory?.Count > 0
+                ? request.ConversationHistory.Select(m => new ChatMessage { Role = m.Role, Content = m.Content }).ToList()
+                : null;
+        }
+
         // Argha - 2026-02-19 - SSE requires these three headers for correct client behaviour
         Response.ContentType = "text/event-stream";
         Response.Headers["Cache-Control"] = "no-cache";
         Response.Headers["X-Accel-Buffering"] = "no";
-
-        // Convert conversation history if provided
-        List<ChatMessage>? history = null;
-        if (request.ConversationHistory?.Count > 0)
-        {
-            history = request.ConversationHistory
-                .Select(m => new ChatMessage { Role = m.Role, Content = m.Content })
-                .ToList();
-        }
 
         // Argha - 2026-02-19 - camelCase + null-ignored for clean SSE output
         var jsonOptions = new JsonSerializerOptions
@@ -109,11 +135,17 @@ public class ChatController : ControllerBase
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
 
+        // Argha - 2026-02-19 - Accumulate tokens to persist full answer to session after streaming (Phase 2.2)
+        var answerBuilder = request.SessionId.HasValue ? new StringBuilder() : null;
+
         try
         {
             await foreach (var streamEvent in _ragService.ChatStreamAsync(
                 request.Query, history, request.TopK, request.DocumentId, cancellationToken))
             {
+                if (streamEvent.Type == "token")
+                    answerBuilder?.Append(streamEvent.Content);
+
                 var json = JsonSerializer.Serialize(streamEvent, jsonOptions);
                 await Response.WriteAsync($"data: {json}\n\n", cancellationToken);
                 await Response.Body.FlushAsync(cancellationToken);
@@ -121,6 +153,13 @@ public class ChatController : ControllerBase
 
             await Response.WriteAsync("data: {\"type\":\"done\"}\n\n", cancellationToken);
             await Response.Body.FlushAsync(cancellationToken);
+
+            // Argha - 2026-02-19 - Persist user query + assembled answer to session (Phase 2.2)
+            if (request.SessionId.HasValue && answerBuilder != null)
+            {
+                await _conversationService.AppendMessagesAsync(
+                    request.SessionId.Value, request.Query, answerBuilder.ToString(), cancellationToken);
+            }
         }
         catch (OperationCanceledException)
         {

@@ -53,6 +53,18 @@ using (var scope = app.Services.CreateScope())
     // Argha - 2026-02-15 - Create SQLite database if it doesn't exist (Phase 1.3)
     var dbContext = scope.ServiceProvider.GetRequiredService<RagApiDbContext>();
     await dbContext.Database.EnsureCreatedAsync();
+
+    // Argha - 2026-02-19 - Create ConversationSessions table on existing DBs (Phase 2.2)
+    // EnsureCreatedAsync only creates new DBs; this handles schema evolution without migrations
+    await dbContext.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ConversationSessions (
+            Id TEXT NOT NULL PRIMARY KEY,
+            CreatedAt TEXT NOT NULL,
+            LastMessageAt TEXT NOT NULL,
+            Title TEXT NULL,
+            MessagesJson TEXT NOT NULL
+        )
+    ");
 }
 
 // Argha - 2026-02-15 - Global exception handling — must be first in pipeline

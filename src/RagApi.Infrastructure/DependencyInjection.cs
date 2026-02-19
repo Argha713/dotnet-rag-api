@@ -47,9 +47,13 @@ public static class DependencyInjection
         services.AddDbContext<RagApiDbContext>(options => options.UseSqlite(connectionString));
         services.AddScoped<IDocumentRepository, DocumentRepository>();
 
+        // Argha - 2026-02-19 - Conversation session repository and service (Phase 2.2)
+        services.AddScoped<IConversationRepository, ConversationRepository>();
+
         // Register application services
         services.AddScoped<RagService>();
         services.AddScoped<DocumentService>();
+        services.AddScoped<ConversationService>();
 
         // Argha - 2026-02-15 - Real health checks for all dependencies (Phase 1.4)
         var healthChecks = services.AddHealthChecks()

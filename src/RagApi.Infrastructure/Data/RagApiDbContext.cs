@@ -12,8 +12,25 @@ public class RagApiDbContext : DbContext
 
     public DbSet<Document> Documents => Set<Document>();
 
+    // Argha - 2026-02-19 - Conversation sessions table (Phase 2.2)
+    public DbSet<ConversationSession> ConversationSessions => Set<ConversationSession>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Argha - 2026-02-19 - ConversationSession model configuration (Phase 2.2)
+        modelBuilder.Entity<ConversationSession>(entity =>
+        {
+            entity.HasKey(s => s.Id);
+
+            entity.Property(s => s.Title)
+                .HasMaxLength(200);
+
+            entity.Property(s => s.MessagesJson)
+                .IsRequired();
+
+            entity.HasIndex(s => s.LastMessageAt);
+        });
+
         modelBuilder.Entity<Document>(entity =>
         {
             entity.HasKey(d => d.Id);

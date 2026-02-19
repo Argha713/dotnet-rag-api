@@ -29,6 +29,13 @@ public class ChatRequest
     /// Optional: Previous conversation messages for context
     /// </summary>
     public List<ConversationMessage>? ConversationHistory { get; set; }
+
+    /// <summary>
+    /// Optional: Server-side session ID. When provided, history is loaded from the session
+    /// and the result is automatically appended. Takes precedence over ConversationHistory.
+    /// </summary>
+    // Argha - 2026-02-19 - Server-side session support (Phase 2.2)
+    public Guid? SessionId { get; set; }
 }
 
 /// <summary>
@@ -122,6 +129,33 @@ public class SearchResultDto
     public string Content { get; set; } = string.Empty;
     public double Score { get; set; }
     public int ChunkIndex { get; set; }
+}
+
+// Argha - 2026-02-19 - Conversation session DTOs (Phase 2.2)
+
+/// <summary>Response returned when a new session is created</summary>
+public class CreateSessionResponse
+{
+    public Guid SessionId { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>A single message in a session's history</summary>
+public class SessionMessageDto
+{
+    public string Role { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public DateTime Timestamp { get; set; }
+}
+
+/// <summary>Full session details including message history</summary>
+public class SessionDto
+{
+    public Guid SessionId { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime LastMessageAt { get; set; }
+    public string? Title { get; set; }
+    public List<SessionMessageDto> Messages { get; set; } = new();
 }
 
 /// <summary>
