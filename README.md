@@ -21,7 +21,8 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **.NE
 - **Real health checks** — Per-dependency status for Qdrant, Ollama, and SQLite
 - **Global error handling** — Exception middleware with structured JSON error responses
 - **Request logging** — Method, path, status code, and elapsed time for every request
-- **68 unit tests** — xUnit + Moq + FluentAssertions covering all layers
+- **Document tags** — Tag documents on upload; filter chat/search by tag for scoped retrieval
+- **94 unit tests** — xUnit + Moq + FluentAssertions covering all layers
 - **Docker-ready** — One command to spin up all dependencies
 - **Swagger UI** — Interactive API documentation at the root URL
 
@@ -134,8 +135,8 @@ setup.bat
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/documents` | Upload a document (PDF, DOCX, TXT, MD) |
-| `GET` | `/api/documents` | List all documents |
+| `POST` | `/api/documents` | Upload a document (PDF, DOCX, TXT, MD); optional `tags` form fields |
+| `GET` | `/api/documents` | List all documents; optional `?tag=` query filter |
 | `GET` | `/api/documents/{id}` | Get document by ID |
 | `DELETE` | `/api/documents/{id}` | Delete a document and its vector data |
 | `GET` | `/api/documents/supported-types` | List supported file types |
@@ -310,17 +311,17 @@ dotnet-rag-api/
 
 ## Roadmap
 
-### Phase 1: Foundation & Production Readiness
+### Phase 1: Foundation & Production Readiness ✅
 - [x] Global exception handling middleware
 - [x] Request/response logging
 - [x] Persistent document storage (SQLite + EF Core)
 - [x] Real health checks (Qdrant, Ollama, SQLite)
-- [x] Unit tests (87 tests — xUnit + Moq + FluentAssertions)
+- [x] Unit tests (94 tests — xUnit + Moq + FluentAssertions)
 
-### Phase 2: Core Features
+### Phase 2: Core Features ✅
 - [x] Streaming chat responses (SSE)
 - [x] Conversation memory with server-side sessions
-- [ ] Document metadata & tag filtering
+- [x] Document metadata & tag filtering
 
 ### Phase 3: Search Improvements
 - [ ] Hybrid search (keyword + semantic)

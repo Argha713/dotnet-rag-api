@@ -70,20 +70,30 @@ public class QdrantVectorStore : IVectorStore
     {
         if (chunks.Count == 0) return;
 
-        var points = chunks.Select(chunk => new PointStruct
+        var points = chunks.Select(chunk =>
         {
-            Id = new PointId { Uuid = chunk.Id.ToString() },
-            Vectors = chunk.Embedding!,
-            Payload =
+            // Argha - 2026-02-19 - Build tags ListValue for Qdrant payload (Phase 2.3)
+            var tagsValue = new Value { ListValue = new ListValue() };
+            foreach (var tag in chunk.Tags)
+                tagsValue.ListValue.Values.Add(new Value { StringValue = tag });
+
+            return new PointStruct
             {
-                ["documentId"] = chunk.DocumentId.ToString(),
-                ["content"] = chunk.Content,
-                ["chunkIndex"] = chunk.ChunkIndex,
-                ["startPosition"] = chunk.StartPosition,
-                ["endPosition"] = chunk.EndPosition,
-                ["fileName"] = chunk.Metadata.GetValueOrDefault("fileName", ""),
-                ["contentType"] = chunk.Metadata.GetValueOrDefault("contentType", "")
-            }
+                Id = new PointId { Uuid = chunk.Id.ToString() },
+                Vectors = chunk.Embedding!,
+                Payload =
+                {
+                    ["documentId"] = chunk.DocumentId.ToString(),
+                    ["content"] = chunk.Content,
+                    ["chunkIndex"] = chunk.ChunkIndex,
+                    ["startPosition"] = chunk.StartPosition,
+                    ["endPosition"] = chunk.EndPosition,
+                    ["fileName"] = chunk.Metadata.GetValueOrDefault("fileName", ""),
+                    ["contentType"] = chunk.Metadata.GetValueOrDefault("contentType", ""),
+                    // Argha - 2026-02-19 - Store tags as list payload for keyword filtering (Phase 2.3)
+                    ["tags"] = tagsValue
+                }
+            };
         }).ToList();
 
         try
@@ -102,31 +112,52 @@ public class QdrantVectorStore : IVectorStore
         }
     }
 
+    // Argha - 2026-02-19 - Added filterByTags; uses Must conditions per tag for AND semantics (Phase 2.3)
     public async Task<List<SearchResult>> SearchAsync(
         float[] queryEmbedding,
         int topK = 5,
         Guid? filterByDocumentId = null,
+        List<string>? filterByTags = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
             Filter? filter = null;
+            var conditions = new List<Condition>();
+
             if (filterByDocumentId.HasValue)
             {
-                filter = new Filter
+                conditions.Add(new Condition
                 {
-                    Must =
+                    Field = new FieldCondition
                     {
-                        new Condition
-                        {
-                            Field = new FieldCondition
-                            {
-                                Key = "documentId",
-                                Match = new Match { Keyword = filterByDocumentId.Value.ToString() }
-                            }
-                        }
+                        Key = "documentId",
+                        Match = new Match { Keyword = filterByDocumentId.Value.ToString() }
                     }
-                };
+                });
+            }
+
+            if (filterByTags?.Count > 0)
+            {
+                // Argha - 2026-02-19 - Each tag becomes a Must condition — AND semantics (Phase 2.3)
+                foreach (var tag in filterByTags)
+                {
+                    conditions.Add(new Condition
+                    {
+                        Field = new FieldCondition
+                        {
+                            Key = "tags",
+                            Match = new Match { Keyword = tag }
+                        }
+                    });
+                }
+            }
+
+            if (conditions.Count > 0)
+            {
+                filter = new Filter();
+                foreach (var c in conditions)
+                    filter.Must.Add(c);
             }
 
             var results = await _client.SearchAsync(

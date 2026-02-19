@@ -44,7 +44,7 @@ public class RagServiceTests
     {
         // Arrange
         var searchResults = CreateSearchResults(2);
-        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(searchResults);
         _chatServiceMock.Setup(c => c.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("Test answer");
@@ -62,7 +62,7 @@ public class RagServiceTests
     public async Task ChatAsync_NoSearchResults_ReturnsFallbackMessage()
     {
         // Arrange
-        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult>());
 
         // Act
@@ -80,7 +80,7 @@ public class RagServiceTests
         // Arrange
         var docId = Guid.NewGuid();
         var searchResults = CreateSearchResults(1);
-        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, docId, It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, docId, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(searchResults);
         _chatServiceMock.Setup(c => c.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("Filtered answer");
@@ -89,7 +89,7 @@ public class RagServiceTests
         await _sut.ChatAsync("question", filterByDocumentId: docId);
 
         // Assert
-        _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, docId, It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, docId, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public class RagServiceTests
             new() { Role = "assistant", Content = "Hi there" }
         };
         var searchResults = CreateSearchResults(1);
-        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(searchResults);
         _chatServiceMock.Setup(c => c.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("Answer with context");
@@ -126,7 +126,7 @@ public class RagServiceTests
         {
             new() { ChunkId = Guid.NewGuid(), DocumentId = Guid.NewGuid(), FileName = "test.txt", Content = longContent, Score = 0.9, ChunkIndex = 0 }
         };
-        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(searchResults);
         _chatServiceMock.Setup(c => c.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("Answer");
@@ -144,7 +144,7 @@ public class RagServiceTests
     {
         // Arrange
         var searchResults = CreateSearchResults(3);
-        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(searchResults);
 
         // Act
@@ -159,14 +159,14 @@ public class RagServiceTests
     public async Task SearchAsync_RespectsTopK()
     {
         // Arrange
-        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 10, null, It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 10, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult>());
 
         // Act
         await _sut.SearchAsync("query", topK: 10);
 
         // Assert
-        _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 10, null, It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 10, null, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -174,14 +174,14 @@ public class RagServiceTests
     {
         // Arrange
         var docId = Guid.NewGuid();
-        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, docId, It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, docId, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult>());
 
         // Act
         await _sut.SearchAsync("query", filterByDocumentId: docId);
 
         // Assert
-        _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, docId, It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, docId, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     // Argha - 2026-02-19 - Streaming tests for ChatStreamAsync (Phase 2.1)
@@ -191,7 +191,7 @@ public class RagServiceTests
     {
         // Arrange
         var searchResults = CreateSearchResults(2);
-        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(searchResults);
         _chatServiceMock.Setup(c => c.GenerateResponseStreamAsync(
                 It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
@@ -217,7 +217,7 @@ public class RagServiceTests
     public async Task ChatStreamAsync_NoResults_YieldsSourcesEventThenFallbackToken()
     {
         // Arrange
-        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult>());
 
         // Act
@@ -240,7 +240,7 @@ public class RagServiceTests
     {
         // Arrange
         var docId = Guid.NewGuid();
-        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, docId, It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, docId, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(CreateSearchResults(1));
         _chatServiceMock.Setup(c => c.GenerateResponseStreamAsync(
                 It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
@@ -250,7 +250,41 @@ public class RagServiceTests
         await foreach (var _ in _sut.ChatStreamAsync("question", filterByDocumentId: docId)) { }
 
         // Assert
-        _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, docId, It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, docId, null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // Argha - 2026-02-19 - Tag filtering tests (Phase 2.3)
+
+    [Fact]
+    public async Task ChatAsync_FiltersByTags_PassesTagsToVectorStore()
+    {
+        // Arrange
+        var tags = new List<string> { "finance", "2024" };
+        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, tags, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateSearchResults(1));
+        _chatServiceMock.Setup(c => c.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Tagged answer");
+
+        // Act
+        await _sut.ChatAsync("question", filterByTags: tags);
+
+        // Assert
+        _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, null, tags, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SearchAsync_FiltersByTags_PassesTagsToVectorStore()
+    {
+        // Arrange
+        var tags = new List<string> { "tech" };
+        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, tags, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<SearchResult>());
+
+        // Act
+        await _sut.SearchAsync("query", filterByTags: tags);
+
+        // Assert
+        _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, null, tags, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     private static async IAsyncEnumerable<string> CreateTestTokenStream(

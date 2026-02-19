@@ -63,7 +63,7 @@ public class DocumentsControllerTests
         fileMock.Setup(f => f.OpenReadStream()).Returns(new MemoryStream(new byte[] { 1 }));
 
         // Act
-        var result = await _sut.UploadDocument(fileMock.Object, CancellationToken.None);
+        var result = await _sut.UploadDocument(fileMock.Object, null, CancellationToken.None);
 
         // Assert
         var createdResult = result.Should().BeOfType<CreatedAtActionResult>().Subject;
@@ -76,7 +76,7 @@ public class DocumentsControllerTests
     public async Task Upload_NullFile_Returns400()
     {
         // Act
-        var result = await _sut.UploadDocument(null!, CancellationToken.None);
+        var result = await _sut.UploadDocument(null!, null, CancellationToken.None);
 
         // Assert
         result.Should().BeOfType<BadRequestObjectResult>();
@@ -90,7 +90,7 @@ public class DocumentsControllerTests
         fileMock.Setup(f => f.Length).Returns(0);
 
         // Act
-        var result = await _sut.UploadDocument(fileMock.Object, CancellationToken.None);
+        var result = await _sut.UploadDocument(fileMock.Object, null, CancellationToken.None);
 
         // Assert
         result.Should().BeOfType<BadRequestObjectResult>();
@@ -173,5 +173,38 @@ public class DocumentsControllerTests
 
         // Assert
         result.Should().BeOfType<NotFoundObjectResult>();
+    }
+
+    // Argha - 2026-02-19 - Tag-related controller tests (Phase 2.3)
+
+    [Fact]
+    public async Task Upload_WithTags_IncludesTagsInDto()
+    {
+        // Arrange
+        var tags = new List<string> { "finance", "q1" };
+        var chunks = new List<DocumentChunk>
+        {
+            new() { Content = "text", Metadata = new Dictionary<string, string>() }
+        };
+        _processorMock.Setup(p => p.ExtractTextAsync(It.IsAny<Stream>(), "text/plain", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Some content");
+        _processorMock.Setup(p => p.ChunkText(It.IsAny<Guid>(), "Some content", null))
+            .Returns(chunks);
+        _embeddingMock.Setup(e => e.GenerateEmbeddingsAsync(It.IsAny<List<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<float[]> { new float[768] });
+
+        var fileMock = new Mock<IFormFile>();
+        fileMock.Setup(f => f.FileName).Returns("tagged.txt");
+        fileMock.Setup(f => f.ContentType).Returns("text/plain");
+        fileMock.Setup(f => f.Length).Returns(100);
+        fileMock.Setup(f => f.OpenReadStream()).Returns(new MemoryStream(new byte[] { 1 }));
+
+        // Act
+        var result = await _sut.UploadDocument(fileMock.Object, tags, CancellationToken.None);
+
+        // Assert
+        var createdResult = result.Should().BeOfType<CreatedAtActionResult>().Subject;
+        var dto = createdResult.Value.Should().BeOfType<DocumentDto>().Subject;
+        dto.Tags.Should().BeEquivalentTo(tags);
     }
 }

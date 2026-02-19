@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using RagApi.Api.Models;
 using RagApi.Application.Services;
@@ -23,13 +24,15 @@ public class DocumentsController : ControllerBase
     /// Upload a document for processing
     /// </summary>
     /// <param name="file">The document file (PDF, DOCX, TXT)</param>
+    /// <param name="tags">Optional tags for metadata filtering (send multiple times for multiple tags)</param>
     /// <returns>The uploaded document information</returns>
+    // Argha - 2026-02-19 - Added optional tags form field for metadata filtering (Phase 2.3)
     [HttpPost]
     [RequestSizeLimit(50_000_000)] // 50MB limit
     [ProducesResponseType(typeof(DocumentDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status415UnsupportedMediaType)]
-    public async Task<IActionResult> UploadDocument(IFormFile file, CancellationToken cancellationToken)
+    public async Task<IActionResult> UploadDocument(IFormFile file, [FromForm] List<string>? tags, CancellationToken cancellationToken)
     {
         if (file == null || file.Length == 0)
         {
@@ -41,6 +44,7 @@ public class DocumentsController : ControllerBase
             stream,
             file.FileName,
             file.ContentType,
+            tags,
             cancellationToken);
 
         var dto = MapToDto(document);
@@ -48,13 +52,14 @@ public class DocumentsController : ControllerBase
     }
 
     /// <summary>
-    /// Get all uploaded documents
+    /// Get all uploaded documents, optionally filtered by a tag
     /// </summary>
+    // Argha - 2026-02-19 - Added optional tag query parameter for listing (Phase 2.3)
     [HttpGet]
     [ProducesResponseType(typeof(List<DocumentDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAllDocuments()
+    public async Task<IActionResult> GetAllDocuments([FromQuery] string? tag = null, CancellationToken cancellationToken = default)
     {
-        var documents = await _documentService.GetAllDocumentsAsync();
+        var documents = await _documentService.GetAllDocumentsAsync(tag, cancellationToken);
         var dtos = documents.Select(MapToDto).ToList();
         return Ok(dtos);
     }
@@ -114,7 +119,9 @@ public class DocumentsController : ControllerBase
             UploadedAt = document.UploadedAt,
             Status = document.Status.ToString(),
             ChunkCount = document.ChunkCount,
-            ErrorMessage = document.ErrorMessage
+            ErrorMessage = document.ErrorMessage,
+            // Argha - 2026-02-19 - Deserialize TagsJson for API response (Phase 2.3)
+            Tags = JsonSerializer.Deserialize<List<string>>(document.TagsJson) ?? new List<string>()
         };
     }
 }

@@ -65,6 +65,15 @@ using (var scope = app.Services.CreateScope())
             MessagesJson TEXT NOT NULL
         )
     ");
+
+    // Argha - 2026-02-19 - Add TagsJson column to existing Documents tables (Phase 2.3)
+    // SQLite does not support DROP COLUMN; catch and ignore if column already exists
+    try
+    {
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE Documents ADD COLUMN TagsJson TEXT NOT NULL DEFAULT '[]'");
+    }
+    catch { /* Column already exists — safe to ignore */ }
 }
 
 // Argha - 2026-02-15 - Global exception handling — must be first in pipeline

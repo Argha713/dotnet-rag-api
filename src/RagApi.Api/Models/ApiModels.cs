@@ -36,6 +36,12 @@ public class ChatRequest
     /// </summary>
     // Argha - 2026-02-19 - Server-side session support (Phase 2.2)
     public Guid? SessionId { get; set; }
+
+    /// <summary>
+    /// Optional: Filter retrieved chunks to documents tagged with ALL specified tags
+    /// </summary>
+    // Argha - 2026-02-19 - Tag-based filtering for RAG retrieval (Phase 2.3)
+    public List<string>? Tags { get; set; }
 }
 
 /// <summary>
@@ -101,6 +107,12 @@ public class SearchRequest
     public int TopK { get; set; } = 5;
 
     public Guid? DocumentId { get; set; }
+
+    /// <summary>
+    /// Optional: Filter results to documents tagged with ALL specified tags
+    /// </summary>
+    // Argha - 2026-02-19 - Tag-based filtering for semantic search (Phase 2.3)
+    public List<string>? Tags { get; set; }
 }
 
 /// <summary>
@@ -116,6 +128,8 @@ public class DocumentDto
     public string Status { get; set; } = string.Empty;
     public int ChunkCount { get; set; }
     public string? ErrorMessage { get; set; }
+    // Argha - 2026-02-19 - Tags deserialized from TagsJson for API response (Phase 2.3)
+    public List<string> Tags { get; set; } = new();
 }
 
 /// <summary>

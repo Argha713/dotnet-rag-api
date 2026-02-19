@@ -206,6 +206,73 @@ public class DocumentServiceTests
         _repositoryMock.Verify(r => r.DeleteAsync(docId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Argha - 2026-02-19 - Tag-related tests (Phase 2.3)
+
+    [Fact]
+    public async Task UploadAsync_WithTags_StoresTagsInDocument()
+    {
+        // Arrange
+        SetupSuccessfulUpload("Hello world");
+        var tags = new List<string> { "finance", "2024" };
+        using var stream = new MemoryStream();
+
+        // Act
+        var result = await _sut.UploadDocumentAsync(stream, "tagged.txt", "text/plain", tags);
+
+        // Assert
+        result.TagsJson.Should().Contain("finance");
+        result.TagsJson.Should().Contain("2024");
+    }
+
+    [Fact]
+    public async Task UploadAsync_WithTags_PropagatesTagsToChunks()
+    {
+        // Arrange
+        var tags = new List<string> { "tech" };
+        var capturedChunks = new List<DocumentChunk>();
+        var chunks = new List<DocumentChunk>
+        {
+            new() { Content = "content", Metadata = new Dictionary<string, string>() }
+        };
+        _processorMock.Setup(p => p.ExtractTextAsync(It.IsAny<Stream>(), "text/plain", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("content");
+        _processorMock.Setup(p => p.ChunkText(It.IsAny<Guid>(), "content", null))
+            .Returns(chunks);
+        _embeddingMock.Setup(e => e.GenerateEmbeddingsAsync(It.IsAny<List<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<float[]> { new float[768] });
+        _vectorStoreMock.Setup(v => v.UpsertChunksAsync(It.IsAny<List<DocumentChunk>>(), It.IsAny<CancellationToken>()))
+            .Callback<List<DocumentChunk>, CancellationToken>((c, _) => capturedChunks.AddRange(c))
+            .Returns(Task.CompletedTask);
+        using var stream = new MemoryStream();
+
+        // Act
+        await _sut.UploadDocumentAsync(stream, "tagged.txt", "text/plain", tags);
+
+        // Assert
+        capturedChunks.Should().HaveCount(1);
+        capturedChunks[0].Tags.Should().ContainSingle("tech");
+    }
+
+    [Fact]
+    public async Task GetAllDocumentsAsync_WithTag_ReturnsOnlyTaggedDocuments()
+    {
+        // Arrange
+        var docs = new List<Document>
+        {
+            new() { FileName = "tagged.txt", TagsJson = "[\"finance\",\"2024\"]" },
+            new() { FileName = "other.txt", TagsJson = "[]" },
+            new() { FileName = "also-tagged.txt", TagsJson = "[\"finance\"]" }
+        };
+        _repositoryMock.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(docs);
+
+        // Act
+        var result = await _sut.GetAllDocumentsAsync("finance");
+
+        // Assert
+        result.Should().HaveCount(2);
+        result.All(d => d.TagsJson.Contains("finance")).Should().BeTrue();
+    }
+
     private void SetupSuccessfulUpload(string extractedText)
     {
         var chunks = new List<DocumentChunk>

@@ -13,6 +13,9 @@ public class Document
     public DocumentStatus Status { get; set; } = DocumentStatus.Pending;
     public int ChunkCount { get; set; }
     public string? ErrorMessage { get; set; }
+
+    // Argha - 2026-02-19 - JSON array of tags for metadata filtering (Phase 2.3)
+    public string TagsJson { get; set; } = "[]";
 }
 
 public enum DocumentStatus

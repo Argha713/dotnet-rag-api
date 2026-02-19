@@ -45,11 +45,13 @@ Remember: Only use information from the context above. Do not make up informatio
     /// <summary>
     /// Process a chat query using RAG (Retrieval-Augmented Generation)
     /// </summary>
+    // Argha - 2026-02-19 - Added filterByTags parameter for metadata tag filtering (Phase 2.3)
     public async Task<ChatResponse> ChatAsync(
         string query,
         List<ChatMessage>? conversationHistory = null,
         int topK = 5,
         Guid? filterByDocumentId = null,
+        List<string>? filterByTags = null,
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Processing RAG query: {Query}", query);
@@ -60,9 +62,10 @@ Remember: Only use information from the context above. Do not make up informatio
 
         // Search for relevant document chunks
         var searchResults = await _vectorStore.SearchAsync(
-            queryEmbedding, 
-            topK, 
-            filterByDocumentId, 
+            queryEmbedding,
+            topK,
+            filterByDocumentId,
+            filterByTags,
             cancellationToken);
         
         _logger.LogInformation("Found {Count} relevant chunks", searchResults.Count);
@@ -110,11 +113,13 @@ Remember: Only use information from the context above. Do not make up informatio
     /// Process a chat query using RAG and stream the response as a sequence of events
     /// </summary>
     // Argha - 2026-02-19 - Streaming variant of ChatAsync for SSE endpoint (Phase 2.1)
+    // Argha - 2026-02-19 - Added filterByTags parameter for metadata tag filtering (Phase 2.3)
     public async IAsyncEnumerable<StreamEvent> ChatStreamAsync(
         string query,
         List<ChatMessage>? conversationHistory = null,
         int topK = 5,
         Guid? filterByDocumentId = null,
+        List<string>? filterByTags = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Processing streaming RAG query: {Query}", query);
@@ -123,7 +128,7 @@ Remember: Only use information from the context above. Do not make up informatio
         var queryEmbedding = await _embeddingService.GenerateEmbeddingAsync(query, cancellationToken);
 
         // Search for relevant document chunks
-        var searchResults = await _vectorStore.SearchAsync(queryEmbedding, topK, filterByDocumentId, cancellationToken);
+        var searchResults = await _vectorStore.SearchAsync(queryEmbedding, topK, filterByDocumentId, filterByTags, cancellationToken);
         _logger.LogInformation("Found {Count} relevant chunks for streaming", searchResults.Count);
 
         // Build source citations from search results
@@ -168,14 +173,16 @@ Remember: Only use information from the context above. Do not make up informatio
     /// <summary>
     /// Perform semantic search without generating a chat response
     /// </summary>
+    // Argha - 2026-02-19 - Added filterByTags parameter for metadata tag filtering (Phase 2.3)
     public async Task<List<SearchResult>> SearchAsync(
         string query,
         int topK = 5,
         Guid? filterByDocumentId = null,
+        List<string>? filterByTags = null,
         CancellationToken cancellationToken = default)
     {
         var queryEmbedding = await _embeddingService.GenerateEmbeddingAsync(query, cancellationToken);
-        return await _vectorStore.SearchAsync(queryEmbedding, topK, filterByDocumentId, cancellationToken);
+        return await _vectorStore.SearchAsync(queryEmbedding, topK, filterByDocumentId, filterByTags, cancellationToken);
     }
 
     private static string BuildContext(List<SearchResult> results)

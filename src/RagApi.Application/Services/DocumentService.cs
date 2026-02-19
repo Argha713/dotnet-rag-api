@@ -1,3 +1,4 @@
+using System.Text.Json;
 using RagApi.Application.Interfaces;
 using RagApi.Domain.Entities;
 using Microsoft.Extensions.Logging;
@@ -37,10 +38,12 @@ public class DocumentService
     /// <summary>
     /// Upload and process a document
     /// </summary>
+    // Argha - 2026-02-19 - Added optional tags parameter for metadata filtering (Phase 2.3)
     public async Task<Document> UploadDocumentAsync(
         Stream fileStream,
         string fileName,
         string contentType,
+        List<string>? tags = null,
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Uploading document: {FileName} ({ContentType})", fileName, contentType);
@@ -52,13 +55,17 @@ public class DocumentService
                 $"Content type '{contentType}' is not supported. Supported types: {string.Join(", ", _documentProcessor.SupportedContentTypes)}");
         }
 
+        var normalizedTags = tags ?? new List<string>();
+
         // Create document record
         var document = new Document
         {
             FileName = fileName,
             ContentType = contentType,
             FileSize = fileStream.Length,
-            Status = DocumentStatus.Processing
+            Status = DocumentStatus.Processing,
+            // Argha - 2026-02-19 - Persist tags as JSON (Phase 2.3)
+            TagsJson = JsonSerializer.Serialize(normalizedTags)
         };
         // Argha - 2026-02-15 - Commented out: was in-memory storage (Phase 1.3)
         // _documents[document.Id] = document;
@@ -91,6 +98,8 @@ public class DocumentService
                 chunks[i].Embedding = embeddings[i];
                 chunks[i].Metadata["fileName"] = fileName;
                 chunks[i].Metadata["contentType"] = contentType;
+                // Argha - 2026-02-19 - Propagate tags to each chunk for Qdrant payload (Phase 2.3)
+                chunks[i].Tags = normalizedTags;
             }
 
             // Step 4: Store chunks in vector database
@@ -129,13 +138,23 @@ public class DocumentService
     }
 
     /// <summary>
-    /// Get all documents
+    /// Get all documents, optionally filtered by a tag
     /// </summary>
-    public async Task<List<Document>> GetAllDocumentsAsync(CancellationToken cancellationToken = default)
+    // Argha - 2026-02-19 - Added optional tag filter; filtering done in memory (Phase 2.3)
+    public async Task<List<Document>> GetAllDocumentsAsync(string? tag = null, CancellationToken cancellationToken = default)
     {
         // Argha - 2026-02-15 - Commented out: was in-memory list (Phase 1.3)
         // return Task.FromResult(_documents.Values.ToList());
-        return await _documentRepository.GetAllAsync(cancellationToken);
+        var all = await _documentRepository.GetAllAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(tag))
+            return all;
+
+        return all.Where(d =>
+        {
+            var docTags = JsonSerializer.Deserialize<List<string>>(d.TagsJson) ?? new List<string>();
+            return docTags.Contains(tag, StringComparer.OrdinalIgnoreCase);
+        }).ToList();
     }
 
     /// <summary>

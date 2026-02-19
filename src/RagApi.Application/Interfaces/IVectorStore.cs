@@ -20,10 +20,12 @@ public interface IVectorStore
     /// <summary>
     /// Search for similar chunks using a query embedding
     /// </summary>
+    // Argha - 2026-02-19 - Added filterByTags parameter for metadata tag filtering (Phase 2.3)
     Task<List<SearchResult>> SearchAsync(
-        float[] queryEmbedding, 
+        float[] queryEmbedding,
         int topK = 5,
         Guid? filterByDocumentId = null,
+        List<string>? filterByTags = null,
         CancellationToken cancellationToken = default);
     
     /// <summary>

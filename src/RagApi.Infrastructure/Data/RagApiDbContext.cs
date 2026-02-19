@@ -50,6 +50,11 @@ public class RagApiDbContext : DbContext
             entity.Property(d => d.ErrorMessage)
                 .HasMaxLength(2000);
 
+            // Argha - 2026-02-19 - Tags stored as JSON array string (Phase 2.3)
+            entity.Property(d => d.TagsJson)
+                .IsRequired()
+                .HasDefaultValue("[]");
+
             entity.HasIndex(d => d.UploadedAt);
         });
     }
