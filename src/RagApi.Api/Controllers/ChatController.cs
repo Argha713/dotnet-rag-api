@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using RagApi.Api.Models;
 using RagApi.Application.Services;
@@ -65,6 +67,65 @@ public class ChatController : ControllerBase
         };
 
         return Ok(dto);
+    }
+
+    /// <summary>
+    /// Stream an AI-powered answer using Server-Sent Events (SSE)
+    /// </summary>
+    /// <remarks>
+    /// Returns a text/event-stream. Each event is a JSON object with a "type" field:
+    /// - "sources": emitted first with source citations and model name
+    /// - "token": one per LLM output token
+    /// - "done": signals end of stream
+    /// </remarks>
+    // Argha - 2026-02-19 - SSE streaming endpoint for Phase 2.1
+    [HttpPost("stream")]
+    public async Task StreamChat([FromBody] ChatRequest request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        // Argha - 2026-02-19 - SSE requires these three headers for correct client behaviour
+        Response.ContentType = "text/event-stream";
+        Response.Headers["Cache-Control"] = "no-cache";
+        Response.Headers["X-Accel-Buffering"] = "no";
+
+        // Convert conversation history if provided
+        List<ChatMessage>? history = null;
+        if (request.ConversationHistory?.Count > 0)
+        {
+            history = request.ConversationHistory
+                .Select(m => new ChatMessage { Role = m.Role, Content = m.Content })
+                .ToList();
+        }
+
+        // Argha - 2026-02-19 - camelCase + null-ignored for clean SSE output
+        var jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        };
+
+        try
+        {
+            await foreach (var streamEvent in _ragService.ChatStreamAsync(
+                request.Query, history, request.TopK, request.DocumentId, cancellationToken))
+            {
+                var json = JsonSerializer.Serialize(streamEvent, jsonOptions);
+                await Response.WriteAsync($"data: {json}\n\n", cancellationToken);
+                await Response.Body.FlushAsync(cancellationToken);
+            }
+
+            await Response.WriteAsync("data: {\"type\":\"done\"}\n\n", cancellationToken);
+            await Response.Body.FlushAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // Argha - 2026-02-19 - Client disconnected mid-stream, exit silently
+        }
     }
 
     /// <summary>

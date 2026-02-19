@@ -315,10 +315,10 @@ dotnet-rag-api/
 - [x] Request/response logging
 - [x] Persistent document storage (SQLite + EF Core)
 - [x] Real health checks (Qdrant, Ollama, SQLite)
-- [x] Unit tests (68 tests — xUnit + Moq + FluentAssertions)
+- [x] Unit tests (73 tests — xUnit + Moq + FluentAssertions)
 
 ### Phase 2: Core Features
-- [ ] Streaming chat responses (SSE)
+- [x] Streaming chat responses (SSE)
 - [ ] Conversation memory with server-side sessions
 - [ ] Document metadata & tag filtering
 

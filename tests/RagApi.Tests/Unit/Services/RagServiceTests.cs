@@ -1,7 +1,9 @@
+using System.Runtime.CompilerServices;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
 using RagApi.Application.Interfaces;
+using RagApi.Application.Models;
 using RagApi.Application.Services;
 using RagApi.Domain.Entities;
 
@@ -180,6 +182,97 @@ public class RagServiceTests
 
         // Assert
         _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, docId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // Argha - 2026-02-19 - Streaming tests for ChatStreamAsync (Phase 2.1)
+
+    [Fact]
+    public async Task ChatStreamAsync_ValidQuery_YieldsSourcesEventThenTokens()
+    {
+        // Arrange
+        var searchResults = CreateSearchResults(2);
+        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(searchResults);
+        _chatServiceMock.Setup(c => c.GenerateResponseStreamAsync(
+                It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateTestTokenStream("Hello", " world"));
+
+        // Act
+        var events = new List<StreamEvent>();
+        await foreach (var evt in _sut.ChatStreamAsync("What is RAG?"))
+            events.Add(evt);
+
+        // Assert
+        events.Should().HaveCount(3);
+        events[0].Type.Should().Be("sources");
+        events[0].Sources.Should().HaveCount(2);
+        events[0].Model.Should().Be("llama3.2");
+        events[1].Type.Should().Be("token");
+        events[1].Content.Should().Be("Hello");
+        events[2].Type.Should().Be("token");
+        events[2].Content.Should().Be(" world");
+    }
+
+    [Fact]
+    public async Task ChatStreamAsync_NoResults_YieldsSourcesEventThenFallbackToken()
+    {
+        // Arrange
+        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<SearchResult>());
+
+        // Act
+        var events = new List<StreamEvent>();
+        await foreach (var evt in _sut.ChatStreamAsync("Unknown topic"))
+            events.Add(evt);
+
+        // Assert
+        events.Should().HaveCount(2);
+        events[0].Type.Should().Be("sources");
+        events[0].Sources.Should().BeEmpty();
+        events[1].Type.Should().Be("token");
+        events[1].Content.Should().Contain("couldn't find any relevant information");
+        _chatServiceMock.Verify(c => c.GenerateResponseStreamAsync(
+            It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ChatStreamAsync_FiltersByDocumentId()
+    {
+        // Arrange
+        var docId = Guid.NewGuid();
+        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, docId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateSearchResults(1));
+        _chatServiceMock.Setup(c => c.GenerateResponseStreamAsync(
+                It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateTestTokenStream("Answer"));
+
+        // Act
+        await foreach (var _ in _sut.ChatStreamAsync("question", filterByDocumentId: docId)) { }
+
+        // Assert
+        _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, docId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    private static async IAsyncEnumerable<string> CreateTestTokenStream(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default,
+        params string[] tokens)
+    {
+        foreach (var token in tokens)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return token;
+            await Task.CompletedTask;
+        }
+    }
+
+    // Argha - 2026-02-19 - Overload without explicit cancellation token for call-site convenience
+    private static async IAsyncEnumerable<string> CreateTestTokenStream(params string[] tokens)
+    {
+        foreach (var token in tokens)
+        {
+            yield return token;
+            await Task.CompletedTask;
+        }
     }
 
     private static List<SearchResult> CreateSearchResults(int count)

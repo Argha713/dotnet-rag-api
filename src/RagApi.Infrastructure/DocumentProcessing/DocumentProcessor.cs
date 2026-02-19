@@ -73,7 +73,7 @@ public class DocumentProcessor : IDocumentProcessor
 
         foreach (var paragraph in paragraphs)
         {
-            // If adding this paragraph would exceed chunk size, save current chunk
+            // Argha - 2026-02-15 - If adding this paragraph would exceed chunk size, save current chunk
             if (currentChunk.Length > 0 && 
                 currentChunk.Length + paragraph.Length > options.ChunkSize)
             {

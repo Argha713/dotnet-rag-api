@@ -1,4 +1,6 @@
+using System.Runtime.CompilerServices;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -128,5 +130,78 @@ public class ChatControllerTests
 
         // Assert
         _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, docId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // Argha - 2026-02-19 - Streaming endpoint tests (Phase 2.1)
+
+    [Fact]
+    public async Task StreamChat_ValidRequest_WritesSseEvents()
+    {
+        // Arrange
+        var searchResults = new List<SearchResult>
+        {
+            new() { ChunkId = Guid.NewGuid(), DocumentId = Guid.NewGuid(), FileName = "doc.txt", Content = "content", Score = 0.9, ChunkIndex = 0 }
+        };
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(searchResults);
+        _chatMock.Setup(c => c.GenerateResponseStreamAsync(
+                It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateTestTokenStream("Hello", " world"));
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Response.Body = new MemoryStream();
+        _sut.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        // Act
+        await _sut.StreamChat(new ChatRequest { Query = "What is AI?" }, CancellationToken.None);
+
+        // Assert
+        httpContext.Response.ContentType.Should().Be("text/event-stream");
+        httpContext.Response.Body.Seek(0, SeekOrigin.Begin);
+        var body = await new StreamReader(httpContext.Response.Body).ReadToEndAsync();
+        body.Should().Contain("\"type\":\"sources\"");
+        body.Should().Contain("\"type\":\"token\"");
+        body.Should().Contain("\"type\":\"done\"");
+    }
+
+    [Fact]
+    public async Task StreamChat_InvalidRequest_Returns400()
+    {
+        // Arrange
+        // Argha - 2026-02-19 - ControllerContext must be set before adding ModelState errors,
+        //   because ModelState is backed by ControllerContext.ModelState and replacing the context
+        //   discards previously added errors
+        var httpContext = new DefaultHttpContext();
+        httpContext.Response.Body = new MemoryStream();
+        _sut.ControllerContext = new ControllerContext { HttpContext = httpContext };
+        _sut.ModelState.AddModelError("Query", "The Query field is required.");
+
+        // Act
+        await _sut.StreamChat(new ChatRequest { Query = string.Empty }, CancellationToken.None);
+
+        // Assert
+        httpContext.Response.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+    }
+
+    private static async IAsyncEnumerable<string> CreateTestTokenStream(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default,
+        params string[] tokens)
+    {
+        foreach (var token in tokens)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return token;
+            await Task.CompletedTask;
+        }
+    }
+
+    // Argha - 2026-02-19 - Overload without explicit cancellation token for call-site convenience
+    private static async IAsyncEnumerable<string> CreateTestTokenStream(params string[] tokens)
+    {
+        foreach (var token in tokens)
+        {
+            yield return token;
+            await Task.CompletedTask;
+        }
     }
 }
