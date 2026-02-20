@@ -3,6 +3,7 @@ using RagApi.Application.Interfaces;
 using RagApi.Application.Models;
 using RagApi.Domain.Entities;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace RagApi.Application.Services;
 
@@ -15,6 +16,8 @@ public class RagService
     private readonly IEmbeddingService _embeddingService;
     private readonly IChatService _chatService;
     private readonly ILogger<RagService> _logger;
+    // Argha - 2026-02-20 - SearchOptions for hybrid search config (Phase 3.1)
+    private readonly SearchOptions _searchOptions;
 
     private const string SystemPromptTemplate = @"You are a helpful AI assistant that answers questions based on the provided context.
 Use ONLY the information from the context below to answer the question. If the context doesn't contain enough information to answer the question, say so clearly.
@@ -30,28 +33,33 @@ Context from documents:
 
 Remember: Only use information from the context above. Do not make up information.";
 
+    // Argha - 2026-02-20 - Added IOptions<SearchOptions> for hybrid search (Phase 3.1)
     public RagService(
         IVectorStore vectorStore,
         IEmbeddingService embeddingService,
         IChatService chatService,
-        ILogger<RagService> logger)
+        ILogger<RagService> logger,
+        IOptions<SearchOptions> searchOptions)
     {
         _vectorStore = vectorStore;
         _embeddingService = embeddingService;
         _chatService = chatService;
         _logger = logger;
+        _searchOptions = searchOptions.Value;
     }
 
     /// <summary>
     /// Process a chat query using RAG (Retrieval-Augmented Generation)
     /// </summary>
     // Argha - 2026-02-19 - Added filterByTags parameter for metadata tag filtering (Phase 2.3)
+    // Argha - 2026-02-20 - Added useHybridSearch parameter for hybrid search (Phase 3.1)
     public async Task<ChatResponse> ChatAsync(
         string query,
         List<ChatMessage>? conversationHistory = null,
         int topK = 5,
         Guid? filterByDocumentId = null,
         List<string>? filterByTags = null,
+        bool? useHybridSearch = null,
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Processing RAG query: {Query}", query);
@@ -60,14 +68,11 @@ Remember: Only use information from the context above. Do not make up informatio
         var queryEmbedding = await _embeddingService.GenerateEmbeddingAsync(query, cancellationToken);
         _logger.LogDebug("Generated query embedding with {Dimensions} dimensions", queryEmbedding.Length);
 
-        // Search for relevant document chunks
-        var searchResults = await _vectorStore.SearchAsync(
-            queryEmbedding,
-            topK,
-            filterByDocumentId,
-            filterByTags,
-            cancellationToken);
-        
+        // Argha - 2026-02-20 - Use hybrid search if enabled by request or config (Phase 3.1)
+        var searchResults = await RetrieveChunksAsync(
+            query, queryEmbedding, topK, filterByDocumentId, filterByTags,
+            useHybridSearch ?? _searchOptions.UseHybridSearch, cancellationToken);
+
         _logger.LogInformation("Found {Count} relevant chunks", searchResults.Count);
 
         if (searchResults.Count == 0)
@@ -114,12 +119,14 @@ Remember: Only use information from the context above. Do not make up informatio
     /// </summary>
     // Argha - 2026-02-19 - Streaming variant of ChatAsync for SSE endpoint (Phase 2.1)
     // Argha - 2026-02-19 - Added filterByTags parameter for metadata tag filtering (Phase 2.3)
+    // Argha - 2026-02-20 - Added useHybridSearch parameter for hybrid search (Phase 3.1)
     public async IAsyncEnumerable<StreamEvent> ChatStreamAsync(
         string query,
         List<ChatMessage>? conversationHistory = null,
         int topK = 5,
         Guid? filterByDocumentId = null,
         List<string>? filterByTags = null,
+        bool? useHybridSearch = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Processing streaming RAG query: {Query}", query);
@@ -127,8 +134,10 @@ Remember: Only use information from the context above. Do not make up informatio
         // Generate embedding for the query
         var queryEmbedding = await _embeddingService.GenerateEmbeddingAsync(query, cancellationToken);
 
-        // Search for relevant document chunks
-        var searchResults = await _vectorStore.SearchAsync(queryEmbedding, topK, filterByDocumentId, filterByTags, cancellationToken);
+        // Argha - 2026-02-20 - Use hybrid search if enabled by request or config (Phase 3.1)
+        var searchResults = await RetrieveChunksAsync(
+            query, queryEmbedding, topK, filterByDocumentId, filterByTags,
+            useHybridSearch ?? _searchOptions.UseHybridSearch, cancellationToken);
         _logger.LogInformation("Found {Count} relevant chunks for streaming", searchResults.Count);
 
         // Build source citations from search results
@@ -174,15 +183,89 @@ Remember: Only use information from the context above. Do not make up informatio
     /// Perform semantic search without generating a chat response
     /// </summary>
     // Argha - 2026-02-19 - Added filterByTags parameter for metadata tag filtering (Phase 2.3)
+    // Argha - 2026-02-20 - Added useHybridSearch parameter for hybrid search (Phase 3.1)
     public async Task<List<SearchResult>> SearchAsync(
         string query,
         int topK = 5,
         Guid? filterByDocumentId = null,
         List<string>? filterByTags = null,
+        bool? useHybridSearch = null,
         CancellationToken cancellationToken = default)
     {
         var queryEmbedding = await _embeddingService.GenerateEmbeddingAsync(query, cancellationToken);
-        return await _vectorStore.SearchAsync(queryEmbedding, topK, filterByDocumentId, filterByTags, cancellationToken);
+        return await RetrieveChunksAsync(
+            query, queryEmbedding, topK, filterByDocumentId, filterByTags,
+            useHybridSearch ?? _searchOptions.UseHybridSearch, cancellationToken);
+    }
+
+    // Argha - 2026-02-20 - Unified retrieval entry point: semantic-only or hybrid (Phase 3.1)
+    private async Task<List<SearchResult>> RetrieveChunksAsync(
+        string query,
+        float[] queryEmbedding,
+        int topK,
+        Guid? filterByDocumentId,
+        List<string>? filterByTags,
+        bool useHybrid,
+        CancellationToken cancellationToken)
+    {
+        if (!useHybrid)
+        {
+            return await _vectorStore.SearchAsync(
+                queryEmbedding, topK, filterByDocumentId, filterByTags, cancellationToken);
+        }
+
+        // Argha - 2026-02-20 - Run semantic and keyword searches in parallel with expanded candidates (Phase 3.1)
+        var candidateCount = topK * _searchOptions.CandidateMultiplier;
+
+        var semanticTask = _vectorStore.SearchAsync(
+            queryEmbedding, candidateCount, filterByDocumentId, filterByTags, cancellationToken);
+        var keywordTask = _vectorStore.KeywordSearchAsync(
+            query, candidateCount, filterByDocumentId, filterByTags, cancellationToken);
+
+        await Task.WhenAll(semanticTask, keywordTask);
+
+        _logger.LogDebug(
+            "Hybrid search: {Semantic} semantic + {Keyword} keyword candidates",
+            semanticTask.Result.Count, keywordTask.Result.Count);
+
+        return FuseWithRrf(semanticTask.Result, keywordTask.Result, topK);
+    }
+
+    // Argha - 2026-02-20 - Reciprocal Rank Fusion: score = Σ 1/(60 + rank) across both lists (Phase 3.1)
+    private static List<SearchResult> FuseWithRrf(
+        List<SearchResult> semanticResults,
+        List<SearchResult> keywordResults,
+        int topK,
+        int k = 60)
+    {
+        var scores = new Dictionary<Guid, (double Score, SearchResult Result)>();
+
+        void AccumulateRrf(List<SearchResult> results)
+        {
+            for (int i = 0; i < results.Count; i++)
+            {
+                var r = results[i];
+                var rrfScore = 1.0 / (k + i + 1);
+                if (scores.TryGetValue(r.ChunkId, out var existing))
+                    scores[r.ChunkId] = (existing.Score + rrfScore, existing.Result);
+                else
+                    scores[r.ChunkId] = (rrfScore, r);
+            }
+        }
+
+        AccumulateRrf(semanticResults);
+        AccumulateRrf(keywordResults);
+
+        return scores.Values
+            .OrderByDescending(x => x.Score)
+            .Take(topK)
+            .Select(x =>
+            {
+                // Argha - 2026-02-20 - Replace placeholder score with the fused RRF score (Phase 3.1)
+                x.Result.Score = x.Score;
+                return x.Result;
+            })
+            .ToList();
     }
 
     private static string BuildContext(List<SearchResult> results)

@@ -3,10 +3,12 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using RagApi.Api.Controllers;
 using RagApi.Api.Models;
 using RagApi.Application.Interfaces;
+using RagApi.Application.Models;
 using RagApi.Application.Services;
 using RagApi.Domain.Entities;
 
@@ -36,11 +38,13 @@ public class ChatControllerTests
         _chatMock.Setup(c => c.ModelName).Returns("llama3.2");
 
         // Argha - 2026-02-15 - Use real RagService with mocked dependencies since it's a concrete class
+        // Argha - 2026-02-20 - Pass default SearchOptions (UseHybridSearch=false) (Phase 3.1)
         var ragService = new RagService(
             _vectorStoreMock.Object,
             _embeddingMock.Object,
             _chatMock.Object,
-            Mock.Of<ILogger<RagService>>());
+            Mock.Of<ILogger<RagService>>(),
+            Options.Create(new SearchOptions()));
 
         // Argha - 2026-02-19 - Real ConversationService with mocked repository (Phase 2.2)
         var conversationService = new ConversationService(

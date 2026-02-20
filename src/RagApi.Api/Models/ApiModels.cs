@@ -42,6 +42,13 @@ public class ChatRequest
     /// </summary>
     // Argha - 2026-02-19 - Tag-based filtering for RAG retrieval (Phase 2.3)
     public List<string>? Tags { get; set; }
+
+    /// <summary>
+    /// Optional: Override the global hybrid search setting for this request.
+    /// true = always hybrid, false = always semantic-only, null = use appsettings default.
+    /// </summary>
+    // Argha - 2026-02-20 - Per-request hybrid search override (Phase 3.1)
+    public bool? UseHybridSearch { get; set; }
 }
 
 /// <summary>
@@ -113,6 +120,12 @@ public class SearchRequest
     /// </summary>
     // Argha - 2026-02-19 - Tag-based filtering for semantic search (Phase 2.3)
     public List<string>? Tags { get; set; }
+
+    /// <summary>
+    /// Optional: Override the global hybrid search setting for this request.
+    /// </summary>
+    // Argha - 2026-02-20 - Per-request hybrid search override (Phase 3.1)
+    public bool? UseHybridSearch { get; set; }
 }
 
 /// <summary>

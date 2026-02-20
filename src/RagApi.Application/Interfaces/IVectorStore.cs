@@ -29,6 +29,18 @@ public interface IVectorStore
         CancellationToken cancellationToken = default);
     
     /// <summary>
+    /// Search for chunks matching a keyword query using full-text index.
+    /// Returns results with Score = 1.0 (rank-based fusion is applied by the caller).
+    /// </summary>
+    // Argha - 2026-02-20 - Keyword search for hybrid search feature (Phase 3.1)
+    Task<List<SearchResult>> KeywordSearchAsync(
+        string query,
+        int topK = 5,
+        Guid? filterByDocumentId = null,
+        List<string>? filterByTags = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Delete all chunks for a specific document
     /// </summary>
     Task DeleteDocumentChunksAsync(Guid documentId, CancellationToken cancellationToken = default);

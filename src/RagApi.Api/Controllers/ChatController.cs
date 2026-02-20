@@ -63,6 +63,8 @@ public class ChatController : ControllerBase
             request.DocumentId,
             // Argha - 2026-02-19 - Pass tags filter for metadata-based retrieval (Phase 2.3)
             request.Tags,
+            // Argha - 2026-02-20 - Pass per-request hybrid search override (Phase 3.1)
+            request.UseHybridSearch,
             cancellationToken);
 
         // Argha - 2026-02-19 - Persist turn to session if SessionId was provided (Phase 2.2)
@@ -144,7 +146,8 @@ public class ChatController : ControllerBase
         {
             await foreach (var streamEvent in _ragService.ChatStreamAsync(
                 // Argha - 2026-02-19 - Pass tags filter through to streaming pipeline (Phase 2.3)
-                request.Query, history, request.TopK, request.DocumentId, request.Tags, cancellationToken))
+                // Argha - 2026-02-20 - Pass per-request hybrid search override (Phase 3.1)
+                request.Query, history, request.TopK, request.DocumentId, request.Tags, request.UseHybridSearch, cancellationToken))
             {
                 if (streamEvent.Type == "token")
                     answerBuilder?.Append(streamEvent.Content);
@@ -191,6 +194,8 @@ public class ChatController : ControllerBase
             request.DocumentId,
             // Argha - 2026-02-19 - Pass tags filter for tag-scoped semantic search (Phase 2.3)
             request.Tags,
+            // Argha - 2026-02-20 - Pass per-request hybrid search override (Phase 3.1)
+            request.UseHybridSearch,
             cancellationToken);
 
         var dtos = results.Select(r => new SearchResultDto

@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using RagApi.Application.Interfaces;
 using RagApi.Application.Models;
@@ -32,11 +33,13 @@ public class RagServiceTests
 
         _chatServiceMock.Setup(c => c.ModelName).Returns("llama3.2");
 
+        // Argha - 2026-02-20 - Pass default SearchOptions (UseHybridSearch=false) so existing tests hit semantic-only path (Phase 3.1)
         _sut = new RagService(
             _vectorStoreMock.Object,
             _embeddingServiceMock.Object,
             _chatServiceMock.Object,
-            _loggerMock.Object);
+            _loggerMock.Object,
+            Options.Create(new SearchOptions()));
     }
 
     [Fact]

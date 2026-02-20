@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RagApi.Application.Interfaces;
+using RagApi.Application.Models;
 using RagApi.Application.Services;
 using RagApi.Infrastructure.AI;
 using RagApi.Infrastructure.Data;
@@ -20,6 +21,8 @@ public static class DependencyInjection
         // Bind configuration
         services.Configure<AiConfiguration>(configuration.GetSection(AiConfiguration.SectionName));
         services.Configure<QdrantConfiguration>(configuration.GetSection(QdrantConfiguration.SectionName));
+        // Argha - 2026-02-20 - Register SearchOptions for hybrid search and re-ranking (Phase 3.1)
+        services.Configure<SearchOptions>(configuration.GetSection(SearchOptions.SectionName));
 
         var aiConfig = configuration.GetSection(AiConfiguration.SectionName).Get<AiConfiguration>() 
             ?? new AiConfiguration();
