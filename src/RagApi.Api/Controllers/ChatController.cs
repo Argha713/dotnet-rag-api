@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using RagApi.Api.Models;
 using RagApi.Application.Services;
@@ -19,11 +20,22 @@ public class ChatController : ControllerBase
     private readonly RagService _ragService;
     private readonly ConversationService _conversationService;
 
+    // Argha - 2026-02-20 - FV validators for complex rules not covered by data annotations (Phase 4.2)
+    private readonly IValidator<ChatRequest> _chatValidator;
+    private readonly IValidator<SearchRequest> _searchValidator;
+
     // Argha - 2026-02-19 - Injected ConversationService for server-side session support (Phase 2.2)
-    public ChatController(RagService ragService, ConversationService conversationService)
+    // Argha - 2026-02-20 - Added FV validators for ChatRequest and SearchRequest (Phase 4.2)
+    public ChatController(
+        RagService ragService,
+        ConversationService conversationService,
+        IValidator<ChatRequest> chatValidator,
+        IValidator<SearchRequest> searchValidator)
     {
         _ragService = ragService;
         _conversationService = conversationService;
+        _chatValidator = chatValidator;
+        _searchValidator = searchValidator;
     }
 
     /// <summary>
@@ -39,6 +51,15 @@ public class ChatController : ControllerBase
         if (!ModelState.IsValid)
         {
             return BadRequest(ModelState);
+        }
+
+        // Argha - 2026-02-20 - Run FluentValidation for complex rules (Tags list, ConversationMessage.Role) (Phase 4.2)
+        var fvResult = await _chatValidator.ValidateAsync(request, cancellationToken);
+        if (!fvResult.IsValid)
+        {
+            foreach (var error in fvResult.Errors)
+                ModelState.AddModelError(error.PropertyName, error.ErrorMessage);
+            return ValidationProblem(ModelState);
         }
 
         // Argha - 2026-02-19 - SessionId takes precedence over ConversationHistory (Phase 2.2)
@@ -106,6 +127,14 @@ public class ChatController : ControllerBase
     public async Task StreamChat([FromBody] ChatRequest request, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        // Argha - 2026-02-20 - Run FluentValidation before SSE headers are set so a 400 can still be returned (Phase 4.2)
+        var fvResult = await _chatValidator.ValidateAsync(request, cancellationToken);
+        if (!fvResult.IsValid)
         {
             Response.StatusCode = StatusCodes.Status400BadRequest;
             return;
@@ -189,6 +218,15 @@ public class ChatController : ControllerBase
         if (!ModelState.IsValid)
         {
             return BadRequest(ModelState);
+        }
+
+        // Argha - 2026-02-20 - Run FluentValidation for Tags list constraints (Phase 4.2)
+        var fvResult = await _searchValidator.ValidateAsync(request, cancellationToken);
+        if (!fvResult.IsValid)
+        {
+            foreach (var error in fvResult.Errors)
+                ModelState.AddModelError(error.PropertyName, error.ErrorMessage);
+            return ValidationProblem(ModelState);
         }
 
         var results = await _ragService.SearchAsync(

@@ -1,9 +1,14 @@
 using System.Text.Json;
+using System.Threading.RateLimiting;
+using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using RagApi.Api.Middleware;
+using RagApi.Api.Models;
+using RagApi.Api.Validators;
 using RagApi.Application.Interfaces;
+using RagApi.Application.Models;
 using RagApi.Infrastructure;
 using RagApi.Infrastructure.Data;
 
@@ -52,16 +57,75 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// Add CORS for development
+// Argha - 2026-02-20 - Configurable CORS: empty AllowedOrigins = allow any (dev); specify origins for production (Phase 4.2)
+var corsSettings = builder.Configuration.GetSection("Cors").Get<CorsSettings>() ?? new CorsSettings();
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        if (corsSettings.AllowedOrigins.Length == 0)
+        {
+            // Argha - 2026-02-20 - Wildcard CORS when no origins configured (Phase 4.2)
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+        }
+        else
+        {
+            // Argha - 2026-02-20 - Restrict to configured origins for production (Phase 4.2)
+            policy.WithOrigins(corsSettings.AllowedOrigins)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+        }
     });
 });
+
+// Argha - 2026-02-20 - Fixed-window rate limiter keyed by client IP; disabled by default (Phase 4.2)
+var rateLimitSettings = builder.Configuration.GetSection("RateLimit").Get<RateLimitSettings>() ?? new RateLimitSettings();
+if (rateLimitSettings.Enabled)
+{
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        {
+            // Argha - 2026-02-20 - Health check is always exempt from rate limiting (Phase 4.2)
+            if (context.Request.Path.StartsWithSegments("/api/system/health", StringComparison.OrdinalIgnoreCase))
+                return RateLimitPartition.GetNoLimiter("health");
+
+            return RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = rateLimitSettings.PermitLimit,
+                    Window = TimeSpan.FromSeconds(rateLimitSettings.WindowSeconds),
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = rateLimitSettings.QueueLimit
+                });
+        });
+
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+        // Argha - 2026-02-20 - Return structured JSON on rate limit rejection (Phase 4.2)
+        options.OnRejected = async (ctx, cancellationToken) =>
+        {
+            ctx.HttpContext.Response.ContentType = "application/json";
+            var response = new
+            {
+                error = "TooManyRequests",
+                message = "Rate limit exceeded. Please try again later."
+            };
+            await ctx.HttpContext.Response.WriteAsync(
+                JsonSerializer.Serialize(response, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                }), cancellationToken);
+        };
+    });
+}
+
+// Argha - 2026-02-20 - Register FluentValidation validators for complex request rules (Phase 4.2)
+builder.Services.AddScoped<IValidator<ChatRequest>, ChatRequestValidator>();
+builder.Services.AddScoped<IValidator<SearchRequest>, SearchRequestValidator>();
 
 // Add Infrastructure services (AI, Vector Store, Document Processing)
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -122,6 +186,11 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors();
 app.UseAuthorization();
+
+// Argha - 2026-02-20 - Apply rate limiting after auth; only active when Enabled=true in config (Phase 4.2)
+if (rateLimitSettings.Enabled)
+    app.UseRateLimiter();
+
 app.MapControllers();
 
 // Argha - 2026-02-15 - Real health check endpoint with dependency status (Phase 1.4)

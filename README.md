@@ -26,7 +26,10 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **.NE
 - **MMR re-ranking** — Maximal Marginal Relevance reorders results to reduce redundancy across retrieved chunks
 - **Configurable chunking** — Choose Fixed, Sentence, or Paragraph chunking strategy per upload
 - **API key authentication** — Protect all endpoints via `X-Api-Key` header; disabled when key is empty
-- **127 unit tests** — xUnit + Moq + FluentAssertions covering all layers
+- **Rate limiting** — Configurable fixed-window rate limiter keyed by IP; opt-in via `RateLimit:Enabled`; health check always exempt
+- **Production CORS** — Configurable allowed origins via `appsettings.json`; empty list = allow any (dev default)
+- **FluentValidation** — Rich input validation for Tags list constraints and `ConversationMessage.Role` allowlist
+- **148 unit tests** — xUnit + Moq + FluentAssertions covering all layers
 - **Docker-ready** — One command to spin up all dependencies
 - **Swagger UI** — Interactive API documentation at the root URL
 
@@ -332,11 +335,11 @@ dotnet-rag-api/
 - [x] Search result re-ranking (MMR)
 - [x] Configurable chunking strategies (Fixed, Sentence, Paragraph) — 120 tests total
 
-### Phase 4: Security & API Management ✅ (in progress)
+### Phase 4: Security & API Management ✅
 - [x] API key authentication — 127 tests total
-- [ ] Rate limiting
-- [ ] Production CORS configuration
-- [ ] Input validation (FluentValidation)
+- [x] Rate limiting — 148 tests total
+- [x] Production CORS configuration
+- [x] Input validation (FluentValidation)
 
 ### Phase 5: Advanced Features
 - [ ] Azure AI Search integration

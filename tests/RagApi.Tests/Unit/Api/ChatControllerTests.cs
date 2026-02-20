@@ -1,5 +1,7 @@
 using System.Runtime.CompilerServices;
 using FluentAssertions;
+using FluentValidation;
+using FluentValidation.Results;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -51,7 +53,17 @@ public class ChatControllerTests
             _conversationRepoMock.Object,
             Mock.Of<ILogger<ConversationService>>());
 
-        _sut = new ChatController(ragService, conversationService);
+        // Argha - 2026-02-20 - Pass always-valid FV mocks so existing tests are unaffected (Phase 4.2)
+        var chatValidatorMock = new Mock<IValidator<ChatRequest>>();
+        chatValidatorMock
+            .Setup(v => v.ValidateAsync(It.IsAny<ChatRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ValidationResult());
+        var searchValidatorMock = new Mock<IValidator<SearchRequest>>();
+        searchValidatorMock
+            .Setup(v => v.ValidateAsync(It.IsAny<SearchRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ValidationResult());
+
+        _sut = new ChatController(ragService, conversationService, chatValidatorMock.Object, searchValidatorMock.Object);
     }
 
     [Fact]
