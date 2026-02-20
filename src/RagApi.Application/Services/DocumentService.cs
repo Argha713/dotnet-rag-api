@@ -1,7 +1,9 @@
 using System.Text.Json;
 using RagApi.Application.Interfaces;
+using RagApi.Application.Models;
 using RagApi.Domain.Entities;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 // Argha - 2026-02-15 - Commented out: replaced in-memory storage with IDocumentRepository (Phase 1.3)
 // using System.Collections.Concurrent;
 
@@ -17,33 +19,40 @@ public class DocumentService
     private readonly IVectorStore _vectorStore;
     private readonly ILogger<DocumentService> _logger;
     private readonly IDocumentRepository _documentRepository;
+    // Argha - 2026-02-20 - Default chunking options from config (Phase 3.3)
+    private readonly DocumentProcessingOptions _processingOptions;
 
     // Argha - 2026-02-15 - Commented out: replaced with SQLite via IDocumentRepository (Phase 1.3)
     // private static readonly ConcurrentDictionary<Guid, Document> _documents = new();
 
+    // Argha - 2026-02-20 - Added IOptions<DocumentProcessingOptions> for configurable chunking (Phase 3.3)
     public DocumentService(
         IDocumentProcessor documentProcessor,
         IEmbeddingService embeddingService,
         IVectorStore vectorStore,
         ILogger<DocumentService> logger,
-        IDocumentRepository documentRepository)
+        IDocumentRepository documentRepository,
+        IOptions<DocumentProcessingOptions> processingOptions)
     {
         _documentProcessor = documentProcessor;
         _embeddingService = embeddingService;
         _vectorStore = vectorStore;
         _logger = logger;
         _documentRepository = documentRepository;
+        _processingOptions = processingOptions.Value;
     }
 
     /// <summary>
     /// Upload and process a document
     /// </summary>
     // Argha - 2026-02-19 - Added optional tags parameter for metadata filtering (Phase 2.3)
+    // Argha - 2026-02-20 - Added optional chunkingStrategy parameter for configurable chunking (Phase 3.3)
     public async Task<Document> UploadDocumentAsync(
         Stream fileStream,
         string fileName,
         string contentType,
         List<string>? tags = null,
+        ChunkingStrategy? chunkingStrategy = null,
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Uploading document: {FileName} ({ContentType})", fileName, contentType);
@@ -85,7 +94,20 @@ public class DocumentService
             _logger.LogDebug("Extracted {Length} characters from document", text.Length);
 
             // Step 2: Chunk the text
-            var chunks = _documentProcessor.ChunkText(document.Id, text);
+            // Argha - 2026-02-20 - Build ChunkingOptions from config defaults, override strategy if supplied (Phase 3.3)
+            var effectiveStrategy = chunkingStrategy
+                ?? (Enum.TryParse<ChunkingStrategy>(_processingOptions.DefaultChunkingStrategy, ignoreCase: true, out var parsed)
+                    ? parsed
+                    : ChunkingStrategy.Fixed);
+
+            var chunkingOptions = new ChunkingOptions
+            {
+                ChunkSize = _processingOptions.ChunkSize,
+                ChunkOverlap = _processingOptions.ChunkOverlap,
+                Strategy = effectiveStrategy
+            };
+
+            var chunks = _documentProcessor.ChunkText(document.Id, text, chunkingOptions);
             _logger.LogDebug("Created {Count} chunks from document", chunks.Count);
 
             // Step 3: Generate embeddings for all chunks

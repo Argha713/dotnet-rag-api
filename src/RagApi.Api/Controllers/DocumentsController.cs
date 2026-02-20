@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using RagApi.Api.Models;
+using RagApi.Application.Interfaces;
 using RagApi.Application.Services;
 
 namespace RagApi.Api.Controllers;
@@ -27,16 +28,35 @@ public class DocumentsController : ControllerBase
     /// <param name="tags">Optional tags for metadata filtering (send multiple times for multiple tags)</param>
     /// <returns>The uploaded document information</returns>
     // Argha - 2026-02-19 - Added optional tags form field for metadata filtering (Phase 2.3)
+    // Argha - 2026-02-20 - Added optional chunkingStrategy form field for per-upload strategy selection (Phase 3.3)
     [HttpPost]
     [RequestSizeLimit(50_000_000)] // 50MB limit
     [ProducesResponseType(typeof(DocumentDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status415UnsupportedMediaType)]
-    public async Task<IActionResult> UploadDocument(IFormFile file, [FromForm] List<string>? tags, CancellationToken cancellationToken)
+    public async Task<IActionResult> UploadDocument(
+        IFormFile file,
+        [FromForm] List<string>? tags,
+        [FromForm] string? chunkingStrategy,
+        CancellationToken cancellationToken)
     {
         if (file == null || file.Length == 0)
         {
             return BadRequest(new { error = "No file provided" });
+        }
+
+        // Argha - 2026-02-20 - Validate chunkingStrategy string; 400 if unrecognized (Phase 3.3)
+        ChunkingStrategy? parsedStrategy = null;
+        if (!string.IsNullOrWhiteSpace(chunkingStrategy))
+        {
+            if (!Enum.TryParse<ChunkingStrategy>(chunkingStrategy, ignoreCase: true, out var s))
+            {
+                return BadRequest(new
+                {
+                    error = $"Invalid chunkingStrategy '{chunkingStrategy}'. Valid values: {string.Join(", ", Enum.GetNames<ChunkingStrategy>())}"
+                });
+            }
+            parsedStrategy = s;
         }
 
         await using var stream = file.OpenReadStream();
@@ -45,6 +65,7 @@ public class DocumentsController : ControllerBase
             file.FileName,
             file.ContentType,
             tags,
+            parsedStrategy,
             cancellationToken);
 
         var dto = MapToDto(document);

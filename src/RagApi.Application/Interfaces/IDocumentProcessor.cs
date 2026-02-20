@@ -28,9 +28,22 @@ public interface IDocumentProcessor
     IReadOnlyList<string> SupportedContentTypes { get; }
 }
 
+// Argha - 2026-02-20 - Chunking strategy selection for Phase 3.3
+public enum ChunkingStrategy
+{
+    /// <summary>Character-count-based splitting with overlap at paragraph boundaries (default).</summary>
+    Fixed,
+    /// <summary>Splits at sentence boundaries (.!?) and groups sentences until ChunkSize is reached.</summary>
+    Sentence,
+    /// <summary>Each blank-line-separated paragraph becomes exactly one chunk (no size limit imposed).</summary>
+    Paragraph
+}
+
 public class ChunkingOptions
 {
     public int ChunkSize { get; set; } = 1000;
     public int ChunkOverlap { get; set; } = 200;
     public string SeparatorPattern { get; set; } = @"\n\n|\r\n\r\n";
+    // Argha - 2026-02-20 - Strategy selection; defaults to Fixed (existing behaviour) (Phase 3.3)
+    public ChunkingStrategy Strategy { get; set; } = ChunkingStrategy.Fixed;
 }

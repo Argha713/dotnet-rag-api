@@ -1,7 +1,9 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using RagApi.Application.Interfaces;
+using RagApi.Application.Models;
 using RagApi.Application.Services;
 using RagApi.Domain.Entities;
 
@@ -28,12 +30,14 @@ public class DocumentServiceTests
         _processorMock.Setup(p => p.IsSupported("text/plain")).Returns(true);
         _processorMock.Setup(p => p.SupportedContentTypes).Returns(new[] { "text/plain", "application/pdf" });
 
+        // Argha - 2026-02-20 - Pass default DocumentProcessingOptions (Phase 3.3)
         _sut = new DocumentService(
             _processorMock.Object,
             _embeddingMock.Object,
             _vectorStoreMock.Object,
             _loggerMock.Object,
-            _repositoryMock.Object);
+            _repositoryMock.Object,
+            Options.Create(new DocumentProcessingOptions()));
     }
 
     [Fact]
@@ -94,7 +98,7 @@ public class DocumentServiceTests
 
         _processorMock.Setup(p => p.ExtractTextAsync(It.IsAny<Stream>(), "text/plain", It.IsAny<CancellationToken>()))
             .ReturnsAsync("Some text content");
-        _processorMock.Setup(p => p.ChunkText(It.IsAny<Guid>(), "Some text content", null))
+        _processorMock.Setup(p => p.ChunkText(It.IsAny<Guid>(), "Some text content", It.IsAny<ChunkingOptions?>()))
             .Returns(chunks);
         _embeddingMock.Setup(e => e.GenerateEmbeddingsAsync(It.IsAny<List<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(embeddings);
@@ -106,7 +110,7 @@ public class DocumentServiceTests
 
         // Assert
         _processorMock.Verify(p => p.ExtractTextAsync(It.IsAny<Stream>(), "text/plain", It.IsAny<CancellationToken>()), Times.Once);
-        _processorMock.Verify(p => p.ChunkText(It.IsAny<Guid>(), "Some text content", null), Times.Once);
+        _processorMock.Verify(p => p.ChunkText(It.IsAny<Guid>(), "Some text content", It.IsAny<ChunkingOptions?>()), Times.Once);
         _embeddingMock.Verify(e => e.GenerateEmbeddingsAsync(It.Is<List<string>>(l => l.Count == 2), It.IsAny<CancellationToken>()), Times.Once);
         _vectorStoreMock.Verify(v => v.UpsertChunksAsync(chunks, It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -236,7 +240,7 @@ public class DocumentServiceTests
         };
         _processorMock.Setup(p => p.ExtractTextAsync(It.IsAny<Stream>(), "text/plain", It.IsAny<CancellationToken>()))
             .ReturnsAsync("content");
-        _processorMock.Setup(p => p.ChunkText(It.IsAny<Guid>(), "content", null))
+        _processorMock.Setup(p => p.ChunkText(It.IsAny<Guid>(), "content", It.IsAny<ChunkingOptions?>()))
             .Returns(chunks);
         _embeddingMock.Setup(e => e.GenerateEmbeddingsAsync(It.IsAny<List<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<float[]> { new float[768] });
@@ -283,7 +287,7 @@ public class DocumentServiceTests
 
         _processorMock.Setup(p => p.ExtractTextAsync(It.IsAny<Stream>(), "text/plain", It.IsAny<CancellationToken>()))
             .ReturnsAsync(extractedText);
-        _processorMock.Setup(p => p.ChunkText(It.IsAny<Guid>(), extractedText, null))
+        _processorMock.Setup(p => p.ChunkText(It.IsAny<Guid>(), extractedText, It.IsAny<ChunkingOptions?>()))
             .Returns(chunks);
         _embeddingMock.Setup(e => e.GenerateEmbeddingsAsync(It.IsAny<List<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(embeddings);

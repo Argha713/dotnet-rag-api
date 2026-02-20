@@ -23,6 +23,8 @@ public static class DependencyInjection
         services.Configure<QdrantConfiguration>(configuration.GetSection(QdrantConfiguration.SectionName));
         // Argha - 2026-02-20 - Register SearchOptions for hybrid search and re-ranking (Phase 3.1)
         services.Configure<SearchOptions>(configuration.GetSection(SearchOptions.SectionName));
+        // Argha - 2026-02-20 - Register DocumentProcessingOptions for configurable chunking (Phase 3.3)
+        services.Configure<DocumentProcessingOptions>(configuration.GetSection(DocumentProcessingOptions.SectionName));
 
         var aiConfig = configuration.GetSection(AiConfiguration.SectionName).Get<AiConfiguration>() 
             ?? new AiConfiguration();

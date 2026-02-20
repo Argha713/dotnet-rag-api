@@ -6,6 +6,7 @@ using Moq;
 using RagApi.Api.Controllers;
 using RagApi.Api.Models;
 using RagApi.Application.Interfaces;
+using RagApi.Application.Models;
 using RagApi.Application.Services;
 using RagApi.Domain.Entities;
 using RagApi.Infrastructure;
@@ -35,12 +36,14 @@ public class SystemControllerTests
         var aiConfig = Options.Create(new AiConfiguration { Provider = "Ollama" });
 
         // Argha - 2026-02-15 - Use real DocumentService with mocked dependencies since it's a concrete class
+        // Argha - 2026-02-20 - Pass default DocumentProcessingOptions (Phase 3.3)
         var documentService = new DocumentService(
             Mock.Of<IDocumentProcessor>(),
             _embeddingMock.Object,
             _vectorStoreMock.Object,
             Mock.Of<ILogger<DocumentService>>(),
-            _repositoryMock.Object);
+            _repositoryMock.Object,
+            Options.Create(new DocumentProcessingOptions()));
 
         _sut = new SystemController(
             _vectorStoreMock.Object,

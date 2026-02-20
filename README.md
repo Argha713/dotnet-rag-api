@@ -24,7 +24,8 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **.NE
 - **Document tags** — Tag documents on upload; filter chat/search by tag for scoped retrieval
 - **Hybrid search** — Combines vector similarity with full-text keyword search using Reciprocal Rank Fusion (RRF)
 - **MMR re-ranking** — Maximal Marginal Relevance reorders results to reduce redundancy across retrieved chunks
-- **110 unit tests** — xUnit + Moq + FluentAssertions covering all layers
+- **Configurable chunking** — Choose Fixed, Sentence, or Paragraph chunking strategy per upload
+- **120 unit tests** — xUnit + Moq + FluentAssertions covering all layers
 - **Docker-ready** — One command to spin up all dependencies
 - **Swagger UI** — Interactive API documentation at the root URL
 
@@ -318,17 +319,17 @@ dotnet-rag-api/
 - [x] Request/response logging
 - [x] Persistent document storage (SQLite + EF Core)
 - [x] Real health checks (Qdrant, Ollama, SQLite)
-- [x] Unit tests (94 tests — xUnit + Moq + FluentAssertions)
+- [x] Unit tests (xUnit + Moq + FluentAssertions)
 
 ### Phase 2: Core Features ✅
 - [x] Streaming chat responses (SSE)
 - [x] Conversation memory with server-side sessions
 - [x] Document metadata & tag filtering
 
-### Phase 3: Search Improvements ✅ (in progress)
+### Phase 3: Search Improvements ✅
 - [x] Hybrid search (keyword + semantic)
 - [x] Search result re-ranking (MMR)
-- [ ] Configurable chunking strategies
+- [x] Configurable chunking strategies (Fixed, Sentence, Paragraph) — 120 tests total
 
 ### Phase 4: Security & API Management
 - [ ] API key authentication

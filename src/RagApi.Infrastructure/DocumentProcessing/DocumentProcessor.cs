@@ -51,17 +51,31 @@ public class DocumentProcessor : IDocumentProcessor
     public List<DocumentChunk> ChunkText(Guid documentId, string text, ChunkingOptions? options = null)
     {
         options ??= new ChunkingOptions();
-        var chunks = new List<DocumentChunk>();
 
         // Clean the text
         text = CleanText(text);
-        
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return chunks;
-        }
 
-        // Split by separator pattern first (paragraphs)
+        if (string.IsNullOrWhiteSpace(text))
+            return new List<DocumentChunk>();
+
+        // Argha - 2026-02-20 - Dispatch to the appropriate strategy (Phase 3.3)
+        var chunks = options.Strategy switch
+        {
+            ChunkingStrategy.Sentence => ChunkBySentence(documentId, text, options),
+            ChunkingStrategy.Paragraph => ChunkByParagraph(documentId, text),
+            _ => ChunkByFixed(documentId, text, options)
+        };
+
+        _logger.LogDebug("Created {ChunkCount} chunks (strategy={Strategy}) from text of length {TextLength}",
+            chunks.Count, options.Strategy, text.Length);
+
+        return chunks;
+    }
+
+    // Argha - 2026-02-20 - Existing paragraph-aware fixed-size chunking, now extracted to a private method (Phase 3.3)
+    private static List<DocumentChunk> ChunkByFixed(Guid documentId, string text, ChunkingOptions options)
+    {
+        var chunks = new List<DocumentChunk>();
         var paragraphs = Regex.Split(text, options.SeparatorPattern)
             .Where(p => !string.IsNullOrWhiteSpace(p))
             .ToList();
@@ -74,7 +88,7 @@ public class DocumentProcessor : IDocumentProcessor
         foreach (var paragraph in paragraphs)
         {
             // Argha - 2026-02-15 - If adding this paragraph would exceed chunk size, save current chunk
-            if (currentChunk.Length > 0 && 
+            if (currentChunk.Length > 0 &&
                 currentChunk.Length + paragraph.Length > options.ChunkSize)
             {
                 chunks.Add(CreateChunk(
@@ -95,7 +109,6 @@ public class DocumentProcessor : IDocumentProcessor
             currentPosition += paragraph.Length + 2; // +2 for newline
         }
 
-        // Add final chunk if there's content
         if (currentChunk.Length > 0)
         {
             chunks.Add(CreateChunk(
@@ -106,8 +119,90 @@ public class DocumentProcessor : IDocumentProcessor
                 currentPosition));
         }
 
-        _logger.LogDebug("Created {ChunkCount} chunks from text of length {TextLength}", 
-            chunks.Count, text.Length);
+        return chunks;
+    }
+
+    // Argha - 2026-02-20 - Sentence-based chunking: splits at .!? boundaries, groups into size-limited chunks (Phase 3.3)
+    private static List<DocumentChunk> ChunkBySentence(Guid documentId, string text, ChunkingOptions options)
+    {
+        var chunks = new List<DocumentChunk>();
+
+        // Split into sentences at . ! ? followed by whitespace or end of string
+        var sentences = Regex.Split(text, @"(?<=[.!?])\s+")
+            .Select(s => s.Trim())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToList();
+
+        if (sentences.Count == 0)
+            return chunks;
+
+        var currentChunk = new StringBuilder();
+        var chunkIndex = 0;
+        var position = 0;
+        var chunkStartPosition = 0;
+        var lastSentence = string.Empty; // Argha - 2026-02-20 - One-sentence overlap (Phase 3.3)
+
+        foreach (var sentence in sentences)
+        {
+            // Argha - 2026-02-20 - When adding this sentence would overflow, flush current chunk (Phase 3.3)
+            if (currentChunk.Length > 0 &&
+                currentChunk.Length + sentence.Length + 1 > options.ChunkSize)
+            {
+                chunks.Add(CreateChunk(
+                    documentId,
+                    currentChunk.ToString().Trim(),
+                    chunkIndex++,
+                    chunkStartPosition,
+                    position));
+
+                // Start next chunk with the last sentence as overlap
+                currentChunk.Clear();
+                if (!string.IsNullOrWhiteSpace(lastSentence))
+                {
+                    currentChunk.Append(lastSentence).Append(' ');
+                    chunkStartPosition = position - lastSentence.Length - 1;
+                }
+                else
+                {
+                    chunkStartPosition = position;
+                }
+            }
+
+            lastSentence = sentence;
+            currentChunk.Append(sentence).Append(' ');
+            position += sentence.Length + 1;
+        }
+
+        if (currentChunk.Length > 0)
+        {
+            chunks.Add(CreateChunk(
+                documentId,
+                currentChunk.ToString().Trim(),
+                chunkIndex,
+                chunkStartPosition,
+                position));
+        }
+
+        return chunks;
+    }
+
+    // Argha - 2026-02-20 - Paragraph-based chunking: each blank-line-separated block is one chunk (Phase 3.3)
+    private static List<DocumentChunk> ChunkByParagraph(Guid documentId, string text)
+    {
+        var paragraphs = Regex.Split(text, @"\n\n|\r\n\r\n")
+            .Select(p => p.Trim())
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .ToList();
+
+        var chunks = new List<DocumentChunk>();
+        var position = 0;
+
+        for (int i = 0; i < paragraphs.Count; i++)
+        {
+            var para = paragraphs[i];
+            chunks.Add(CreateChunk(documentId, para, i, position, position + para.Length));
+            position += para.Length + 2; // +2 for the blank-line separator
+        }
 
         return chunks;
     }

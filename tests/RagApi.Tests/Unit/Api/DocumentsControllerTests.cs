@@ -2,10 +2,12 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using RagApi.Api.Controllers;
 using RagApi.Api.Models;
 using RagApi.Application.Interfaces;
+using RagApi.Application.Models;
 using RagApi.Application.Services;
 using RagApi.Domain.Entities;
 
@@ -31,12 +33,14 @@ public class DocumentsControllerTests
         _processorMock.Setup(p => p.SupportedContentTypes).Returns(new[] { "text/plain", "application/pdf" });
 
         // Argha - 2026-02-15 - Use real DocumentService with mocked dependencies since it's a concrete class
+        // Argha - 2026-02-20 - Pass default DocumentProcessingOptions (Phase 3.3)
         var documentService = new DocumentService(
             _processorMock.Object,
             _embeddingMock.Object,
             _vectorStoreMock.Object,
             Mock.Of<ILogger<DocumentService>>(),
-            _repositoryMock.Object);
+            _repositoryMock.Object,
+            Options.Create(new DocumentProcessingOptions()));
 
         _sut = new DocumentsController(documentService);
     }
@@ -51,7 +55,7 @@ public class DocumentsControllerTests
         };
         _processorMock.Setup(p => p.ExtractTextAsync(It.IsAny<Stream>(), "text/plain", It.IsAny<CancellationToken>()))
             .ReturnsAsync("Some content");
-        _processorMock.Setup(p => p.ChunkText(It.IsAny<Guid>(), "Some content", null))
+        _processorMock.Setup(p => p.ChunkText(It.IsAny<Guid>(), "Some content", It.IsAny<ChunkingOptions?>()))
             .Returns(chunks);
         _embeddingMock.Setup(e => e.GenerateEmbeddingsAsync(It.IsAny<List<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<float[]> { new float[768] });
@@ -63,7 +67,7 @@ public class DocumentsControllerTests
         fileMock.Setup(f => f.OpenReadStream()).Returns(new MemoryStream(new byte[] { 1 }));
 
         // Act
-        var result = await _sut.UploadDocument(fileMock.Object, null, CancellationToken.None);
+        var result = await _sut.UploadDocument(fileMock.Object, null, null, CancellationToken.None);
 
         // Assert
         var createdResult = result.Should().BeOfType<CreatedAtActionResult>().Subject;
@@ -76,7 +80,7 @@ public class DocumentsControllerTests
     public async Task Upload_NullFile_Returns400()
     {
         // Act
-        var result = await _sut.UploadDocument(null!, null, CancellationToken.None);
+        var result = await _sut.UploadDocument(null!, null, null, CancellationToken.None);
 
         // Assert
         result.Should().BeOfType<BadRequestObjectResult>();
@@ -90,7 +94,7 @@ public class DocumentsControllerTests
         fileMock.Setup(f => f.Length).Returns(0);
 
         // Act
-        var result = await _sut.UploadDocument(fileMock.Object, null, CancellationToken.None);
+        var result = await _sut.UploadDocument(fileMock.Object, null, null, CancellationToken.None);
 
         // Assert
         result.Should().BeOfType<BadRequestObjectResult>();
@@ -188,7 +192,7 @@ public class DocumentsControllerTests
         };
         _processorMock.Setup(p => p.ExtractTextAsync(It.IsAny<Stream>(), "text/plain", It.IsAny<CancellationToken>()))
             .ReturnsAsync("Some content");
-        _processorMock.Setup(p => p.ChunkText(It.IsAny<Guid>(), "Some content", null))
+        _processorMock.Setup(p => p.ChunkText(It.IsAny<Guid>(), "Some content", It.IsAny<ChunkingOptions?>()))
             .Returns(chunks);
         _embeddingMock.Setup(e => e.GenerateEmbeddingsAsync(It.IsAny<List<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<float[]> { new float[768] });
@@ -200,7 +204,7 @@ public class DocumentsControllerTests
         fileMock.Setup(f => f.OpenReadStream()).Returns(new MemoryStream(new byte[] { 1 }));
 
         // Act
-        var result = await _sut.UploadDocument(fileMock.Object, tags, CancellationToken.None);
+        var result = await _sut.UploadDocument(fileMock.Object, tags, null, CancellationToken.None);
 
         // Assert
         var createdResult = result.Should().BeOfType<CreatedAtActionResult>().Subject;
