@@ -26,6 +26,30 @@ builder.Services.AddSwaggerGen(options =>
             Url = new Uri("https://github.com/Argha713")
         }
     });
+
+    // Argha - 2026-02-20 - Add API key security definition so Swagger UI shows Authorize button (Phase 4.1)
+    options.AddSecurityDefinition("ApiKey", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Name = "X-Api-Key",
+        Description = "API key authentication. Enter your key in the field below."
+    });
+
+    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "ApiKey"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
 });
 
 // Add CORS for development
@@ -81,6 +105,9 @@ app.UseMiddleware<GlobalExceptionMiddleware>();
 
 // Argha - 2026-02-15 - Log method, path, status code, and elapsed time for every request
 app.UseMiddleware<RequestLoggingMiddleware>();
+
+// Argha - 2026-02-20 - Reject requests missing or with invalid X-Api-Key header (Phase 4.1)
+app.UseMiddleware<ApiKeyMiddleware>();
 
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
