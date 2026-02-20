@@ -49,6 +49,13 @@ public class ChatRequest
     /// </summary>
     // Argha - 2026-02-20 - Per-request hybrid search override (Phase 3.1)
     public bool? UseHybridSearch { get; set; }
+
+    /// <summary>
+    /// Optional: Override the global MMR re-ranking setting for this request.
+    /// true = always re-rank, false = skip re-ranking, null = use appsettings default.
+    /// </summary>
+    // Argha - 2026-02-20 - Per-request MMR re-ranking override (Phase 3.2)
+    public bool? UseReRanking { get; set; }
 }
 
 /// <summary>
@@ -126,6 +133,12 @@ public class SearchRequest
     /// </summary>
     // Argha - 2026-02-20 - Per-request hybrid search override (Phase 3.1)
     public bool? UseHybridSearch { get; set; }
+
+    /// <summary>
+    /// Optional: Override the global MMR re-ranking setting for this request.
+    /// </summary>
+    // Argha - 2026-02-20 - Per-request MMR re-ranking override (Phase 3.2)
+    public bool? UseReRanking { get; set; }
 }
 
 /// <summary>

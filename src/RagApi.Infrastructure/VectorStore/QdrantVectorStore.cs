@@ -198,6 +198,86 @@ public class QdrantVectorStore : IVectorStore
         }
     }
 
+    // Argha - 2026-02-20 - Same as SearchAsync but requests vectors back for MMR re-ranking (Phase 3.2)
+    public async Task<List<SearchResult>> SearchWithEmbeddingsAsync(
+        float[] queryEmbedding,
+        int topK = 5,
+        Guid? filterByDocumentId = null,
+        List<string>? filterByTags = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            Filter? filter = null;
+            var conditions = new List<Condition>();
+
+            if (filterByDocumentId.HasValue)
+            {
+                conditions.Add(new Condition
+                {
+                    Field = new FieldCondition
+                    {
+                        Key = "documentId",
+                        Match = new Match { Keyword = filterByDocumentId.Value.ToString() }
+                    }
+                });
+            }
+
+            if (filterByTags?.Count > 0)
+            {
+                foreach (var tag in filterByTags)
+                {
+                    conditions.Add(new Condition
+                    {
+                        Field = new FieldCondition
+                        {
+                            Key = "tags",
+                            Match = new Match { Keyword = tag }
+                        }
+                    });
+                }
+            }
+
+            if (conditions.Count > 0)
+            {
+                filter = new Filter();
+                foreach (var c in conditions)
+                    filter.Must.Add(c);
+            }
+
+            // Argha - 2026-02-20 - Pass vectorsSelector: true so ScoredPoint.Vectors is populated (Phase 3.2)
+            var results = await _client.SearchAsync(
+                collectionName: _config.CollectionName,
+                vector: queryEmbedding,
+                limit: (ulong)topK,
+                filter: filter,
+                payloadSelector: true,
+                vectorsSelector: true,
+                cancellationToken: cancellationToken);
+
+            return results.Select(r => new SearchResult
+            {
+                ChunkId = Guid.Parse(r.Id.Uuid),
+                DocumentId = Guid.Parse(r.Payload["documentId"].StringValue),
+                FileName = r.Payload["fileName"].StringValue,
+                Content = r.Payload["content"].StringValue,
+                Score = r.Score,
+                ChunkIndex = (int)r.Payload["chunkIndex"].IntegerValue,
+                Metadata = new Dictionary<string, string>
+                {
+                    ["contentType"] = r.Payload["contentType"].StringValue
+                },
+                // Argha - 2026-02-20 - Convert protobuf RepeatedField<float> to float[] for MMR (Phase 3.2)
+                Embedding = r.Vectors?.Vector?.Data.ToArray()
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to search Qdrant with embeddings");
+            throw;
+        }
+    }
+
     // Argha - 2026-02-20 - Full-text keyword search using Qdrant payload index (Phase 3.1)
     public async Task<List<SearchResult>> KeywordSearchAsync(
         string query,

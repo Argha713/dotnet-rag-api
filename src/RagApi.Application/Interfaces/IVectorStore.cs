@@ -29,6 +29,18 @@ public interface IVectorStore
         CancellationToken cancellationToken = default);
     
     /// <summary>
+    /// Search for similar chunks and include their vector embeddings in the results.
+    /// Used by MMR re-ranking which needs cross-similarities between result chunks.
+    /// </summary>
+    // Argha - 2026-02-20 - Returns results with Embedding populated for MMR re-ranking (Phase 3.2)
+    Task<List<SearchResult>> SearchWithEmbeddingsAsync(
+        float[] queryEmbedding,
+        int topK = 5,
+        Guid? filterByDocumentId = null,
+        List<string>? filterByTags = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Search for chunks matching a keyword query using full-text index.
     /// Returns results with Score = 1.0 (rank-based fusion is applied by the caller).
     /// </summary>

@@ -12,4 +12,7 @@ public class SearchResult
     public double Score { get; set; }
     public int ChunkIndex { get; set; }
     public Dictionary<string, string> Metadata { get; set; } = new();
+
+    // Argha - 2026-02-20 - Populated only when SearchWithEmbeddingsAsync is used (MMR re-ranking, Phase 3.2)
+    public float[]? Embedding { get; set; }
 }
