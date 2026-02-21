@@ -167,7 +167,8 @@ public class ChunkingStrategyTests
             Mock.Of<IDocumentRepository>(),
             Options.Create(new DocumentProcessingOptions()));
 
-        var controller = new DocumentsController(documentService);
+        // Argha - 2026-02-21 - Pass default BatchUploadOptions to satisfy new constructor parameter (Phase 5.2)
+        var controller = new DocumentsController(documentService, Options.Create(new BatchUploadOptions()));
 
         var fileMock = new Mock<IFormFile>();
         fileMock.Setup(f => f.Length).Returns(10);

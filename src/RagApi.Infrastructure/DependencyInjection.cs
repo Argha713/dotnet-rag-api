@@ -29,6 +29,8 @@ public static class DependencyInjection
         services.Configure<DocumentProcessingOptions>(configuration.GetSection(DocumentProcessingOptions.SectionName));
         // Argha - 2026-02-21 - Register VectorStoreConfiguration for provider switching (Phase 5.1)
         services.Configure<VectorStoreConfiguration>(configuration.GetSection(VectorStoreConfiguration.SectionName));
+        // Argha - 2026-02-21 - Register BatchUploadOptions for concurrent batch document upload (Phase 5.2)
+        services.Configure<BatchUploadOptions>(configuration.GetSection(BatchUploadOptions.SectionName));
 
         var aiConfig = configuration.GetSection(AiConfiguration.SectionName).Get<AiConfiguration>() 
             ?? new AiConfiguration();

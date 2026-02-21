@@ -29,7 +29,7 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **.NE
 - **Rate limiting** — Configurable fixed-window rate limiter keyed by IP; opt-in via `RateLimit:Enabled`; health check always exempt
 - **Production CORS** — Configurable allowed origins via `appsettings.json`; empty list = allow any (dev default)
 - **FluentValidation** — Rich input validation for Tags list constraints and `ConversationMessage.Role` allowlist
-- **168 unit tests** — xUnit + Moq + FluentAssertions covering all layers
+- **181 unit tests** — xUnit + Moq + FluentAssertions covering all layers
 - **Docker-ready** — One command to spin up all dependencies
 - **Swagger UI** — Interactive API documentation at the root URL
 
@@ -143,6 +143,7 @@ setup.bat
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/documents` | Upload a document (PDF, DOCX, TXT, MD); optional `tags` form fields |
+| `POST` | `/api/documents/batch` | Upload 1–20 documents in one request; returns per-file results |
 | `GET` | `/api/documents` | List all documents; optional `?tag=` query filter |
 | `GET` | `/api/documents/{id}` | Get document by ID |
 | `DELETE` | `/api/documents/{id}` | Delete a document and its vector data |
@@ -334,17 +335,17 @@ dotnet-rag-api/
 ### Phase 3: Search Improvements ✅
 - [x] Hybrid search (keyword + semantic)
 - [x] Search result re-ranking (MMR)
-- [x] Configurable chunking strategies (Fixed, Sentence, Paragraph) — 120 tests total
+- [x] Configurable chunking strategies (Fixed, Sentence, Paragraph)
 
 ### Phase 4: Security & API Management ✅
-- [x] API key authentication — 127 tests total
-- [x] Rate limiting — 148 tests total
+- [x] API key authentication
+- [x] Rate limiting
 - [x] Production CORS configuration
 - [x] Input validation (FluentValidation)
 
-### Phase 5: Advanced Features ✅ (5.1 done)
-- [x] Azure AI Search integration — 168 tests total
-- [ ] Batch document upload
+### Phase 5: Advanced Features ✅ 
+- [x] Azure AI Search integration 
+- [x] Batch document upload
 - [ ] Document update & re-process
 - [ ] Export conversation history
 

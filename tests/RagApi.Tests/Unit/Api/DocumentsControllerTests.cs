@@ -42,7 +42,8 @@ public class DocumentsControllerTests
             _repositoryMock.Object,
             Options.Create(new DocumentProcessingOptions()));
 
-        _sut = new DocumentsController(documentService);
+        // Argha - 2026-02-21 - Pass default BatchUploadOptions to satisfy new constructor parameter (Phase 5.2)
+        _sut = new DocumentsController(documentService, Options.Create(new BatchUploadOptions()));
     }
 
     [Fact]

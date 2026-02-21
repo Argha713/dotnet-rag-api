@@ -198,6 +198,38 @@ public class SessionDto
     public List<SessionMessageDto> Messages { get; set; } = new();
 }
 
+// Argha - 2026-02-21 - Batch upload response DTOs (Phase 5.2)
+
+/// <summary>
+/// Summary response returned by POST /api/documents/batch
+/// </summary>
+public class BatchUploadResultDto
+{
+    /// <summary>Total number of files submitted in the request</summary>
+    public int TotalFiles { get; set; }
+
+    /// <summary>Number of files that were successfully processed</summary>
+    public int Succeeded { get; set; }
+
+    /// <summary>Number of files that failed to process</summary>
+    public int Failed { get; set; }
+
+    /// <summary>Per-file result details</summary>
+    public List<BatchUploadItemResultDto> Results { get; set; } = new();
+}
+
+/// <summary>
+/// Per-file result within a batch upload response
+/// </summary>
+public class BatchUploadItemResultDto
+{
+    public string FileName { get; set; } = string.Empty;
+    public bool Succeeded { get; set; }
+    public Guid? DocumentId { get; set; }
+    public int? ChunkCount { get; set; }
+    public string? ErrorMessage { get; set; }
+}
+
 /// <summary>
 /// Response model for system health/stats
 /// </summary>

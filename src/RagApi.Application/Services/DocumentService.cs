@@ -25,14 +25,19 @@ public class DocumentService
     // Argha - 2026-02-15 - Commented out: replaced with SQLite via IDocumentRepository 
     // private static readonly ConcurrentDictionary<Guid, Document> _documents = new();
 
-    // Argha - 2026-02-20 - Added IOptions<DocumentProcessingOptions> for configurable chunking 
+    // Argha - 2026-02-21 - Batch upload options for concurrency and file count limits (Phase 5.2)
+    private readonly BatchUploadOptions _batchOptions;
+
+    // Argha - 2026-02-20 - Added IOptions<DocumentProcessingOptions> for configurable chunking
+    // Argha - 2026-02-21 - Added IOptions<BatchUploadOptions> for batch upload settings (Phase 5.2)
     public DocumentService(
         IDocumentProcessor documentProcessor,
         IEmbeddingService embeddingService,
         IVectorStore vectorStore,
         ILogger<DocumentService> logger,
         IDocumentRepository documentRepository,
-        IOptions<DocumentProcessingOptions> processingOptions)
+        IOptions<DocumentProcessingOptions> processingOptions,
+        IOptions<BatchUploadOptions>? batchOptions = null)
     {
         _documentProcessor = documentProcessor;
         _embeddingService = embeddingService;
@@ -40,6 +45,8 @@ public class DocumentService
         _logger = logger;
         _documentRepository = documentRepository;
         _processingOptions = processingOptions.Value;
+        // Argha - 2026-02-21 - Optional to avoid breaking existing test constructors that don't pass it
+        _batchOptions = batchOptions?.Value ?? new BatchUploadOptions();
     }
 
     /// <summary>
@@ -203,4 +210,86 @@ public class DocumentService
     {
         return _documentProcessor.SupportedContentTypes;
     }
+
+    // Argha - 2026-02-21 - Batch upload: process multiple files concurrently with bounded parallelism (Phase 5.2)
+    /// <summary>
+    /// Upload and process multiple documents concurrently.
+    /// Partial failure is allowed — exceptions per file are caught and returned as failed results,
+    /// not propagated to the caller.
+    /// </summary>
+    public async Task<List<BatchUploadItemResult>> BatchUploadDocumentsAsync(
+        List<(Stream Stream, string FileName, string ContentType)> files,
+        List<string>? tags,
+        ChunkingStrategy? chunkingStrategy,
+        CancellationToken cancellationToken = default)
+    {
+        if (files.Count == 0)
+            return new List<BatchUploadItemResult>();
+
+        _logger.LogInformation(
+            "Starting batch upload of {Count} files (maxConcurrency={Max})",
+            files.Count, _batchOptions.MaxConcurrency);
+
+        // Argha - 2026-02-21 - SemaphoreSlim limits concurrent embedding calls to avoid overwhelming the AI service
+        var semaphore = new SemaphoreSlim(_batchOptions.MaxConcurrency, _batchOptions.MaxConcurrency);
+
+        var tasks = files.Select(async file =>
+        {
+            await semaphore.WaitAsync(cancellationToken);
+            try
+            {
+                var document = await UploadDocumentAsync(
+                    file.Stream,
+                    file.FileName,
+                    file.ContentType,
+                    tags,
+                    chunkingStrategy,
+                    cancellationToken);
+
+                return new BatchUploadItemResult
+                {
+                    FileName = file.FileName,
+                    Succeeded = true,
+                    DocumentId = document.Id,
+                    ChunkCount = document.ChunkCount
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Batch upload: file '{FileName}' failed", file.FileName);
+                return new BatchUploadItemResult
+                {
+                    FileName = file.FileName,
+                    Succeeded = false,
+                    ErrorMessage = ex.Message
+                };
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
+
+        var results = (await Task.WhenAll(tasks)).ToList();
+
+        _logger.LogInformation(
+            "Batch upload complete. Succeeded: {Ok}, Failed: {Fail}",
+            results.Count(r => r.Succeeded),
+            results.Count(r => !r.Succeeded));
+
+        return results;
+    }
+}
+
+// Argha - 2026-02-21 - Internal result model for batch upload, mapped to DTO at the controller layer (Phase 5.2)
+/// <summary>
+/// Per-file result produced by DocumentService.BatchUploadDocumentsAsync
+/// </summary>
+public class BatchUploadItemResult
+{
+    public string FileName { get; set; } = string.Empty;
+    public bool Succeeded { get; set; }
+    public Guid? DocumentId { get; set; }
+    public int? ChunkCount { get; set; }
+    public string? ErrorMessage { get; set; }
 }
