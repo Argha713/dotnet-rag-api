@@ -292,4 +292,117 @@ public class DocumentServiceTests
         _embeddingMock.Setup(e => e.GenerateEmbeddingsAsync(It.IsAny<List<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(embeddings);
     }
+
+    // Argha - 2026-02-21 - Tests for UpdateDocumentAsync 
+
+    [Fact]
+    public async Task UpdateAsync_DocumentNotFound_ThrowsKeyNotFoundException()
+    {
+        // Arrange
+        _repositoryMock.Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Document?)null);
+        using var stream = new MemoryStream(new byte[] { 1, 2, 3 });
+
+        // Act
+        var act = () => _sut.UpdateDocumentAsync(Guid.NewGuid(), stream, "doc.txt", "text/plain");
+
+        // Assert
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_UnsupportedContentType_ThrowsNotSupportedException()
+    {
+        // Arrange
+        var docId = Guid.NewGuid();
+        var existingDoc = new Document { Id = docId, FileName = "old.txt" };
+        _repositoryMock.Setup(r => r.GetByIdAsync(docId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingDoc);
+        _processorMock.Setup(p => p.IsSupported("image/png")).Returns(false);
+        using var stream = new MemoryStream(new byte[] { 1 });
+
+        // Act
+        var act = () => _sut.UpdateDocumentAsync(docId, stream, "photo.png", "image/png");
+
+        // Assert
+        await act.Should().ThrowAsync<NotSupportedException>().WithMessage("*image/png*");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_Success_DeletesOldChunksAndUpsertsNew()
+    {
+        // Arrange
+        var docId = Guid.NewGuid();
+        var existingDoc = new Document { Id = docId, FileName = "old.txt" };
+        _repositoryMock.Setup(r => r.GetByIdAsync(docId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingDoc);
+        SetupSuccessfulUpload("New content");
+        using var stream = new MemoryStream();
+
+        // Act
+        await _sut.UpdateDocumentAsync(docId, stream, "updated.txt", "text/plain");
+
+        // Assert
+        _vectorStoreMock.Verify(v => v.DeleteDocumentChunksAsync(docId, It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.UpsertChunksAsync(It.IsAny<List<DocumentChunk>>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_PreservesDocumentId()
+    {
+        // Arrange
+        var docId = Guid.NewGuid();
+        var existingDoc = new Document { Id = docId, FileName = "old.txt" };
+        _repositoryMock.Setup(r => r.GetByIdAsync(docId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingDoc);
+        SetupSuccessfulUpload("New content");
+        using var stream = new MemoryStream();
+
+        // Act
+        var result = await _sut.UpdateDocumentAsync(docId, stream, "updated.txt", "text/plain");
+
+        // Assert
+        result.Id.Should().Be(docId);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_SetsUpdatedAt()
+    {
+        // Arrange
+        var docId = Guid.NewGuid();
+        var existingDoc = new Document { Id = docId, FileName = "old.txt" };
+        _repositoryMock.Setup(r => r.GetByIdAsync(docId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingDoc);
+        SetupSuccessfulUpload("New content");
+        using var stream = new MemoryStream();
+
+        // Act
+        var result = await _sut.UpdateDocumentAsync(docId, stream, "updated.txt", "text/plain");
+
+        // Assert
+        result.UpdatedAt.Should().NotBeNull();
+        result.UpdatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ProcessingFails_SetsFailedStatusAndRethrows()
+    {
+        // Arrange
+        var docId = Guid.NewGuid();
+        var existingDoc = new Document { Id = docId, FileName = "old.txt" };
+        _repositoryMock.Setup(r => r.GetByIdAsync(docId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingDoc);
+        _processorMock.Setup(p => p.ExtractTextAsync(It.IsAny<Stream>(), "text/plain", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Extraction failed"));
+        using var stream = new MemoryStream();
+
+        // Act
+        var act = () => _sut.UpdateDocumentAsync(docId, stream, "updated.txt", "text/plain");
+
+        // Assert
+        await act.Should().ThrowAsync<Exception>();
+        _repositoryMock.Verify(r => r.UpdateAsync(
+            It.Is<Document>(d => d.Status == DocumentStatus.Failed && d.ErrorMessage == "Extraction failed"),
+            It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+    }
 }

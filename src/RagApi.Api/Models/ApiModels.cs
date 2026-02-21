@@ -154,8 +154,11 @@ public class DocumentDto
     public string Status { get; set; } = string.Empty;
     public int ChunkCount { get; set; }
     public string? ErrorMessage { get; set; }
-    // Argha - 2026-02-19 - Tags deserialized from TagsJson for API response 
+    // Argha - 2026-02-19 - Tags deserialized from TagsJson for API response
     public List<string> Tags { get; set; } = new();
+
+    // Argha - 2026-02-21 - Null for documents never re-processed; set on first update 
+    public DateTime? UpdatedAt { get; set; }
 }
 
 /// <summary>
@@ -198,7 +201,7 @@ public class SessionDto
     public List<SessionMessageDto> Messages { get; set; } = new();
 }
 
-// Argha - 2026-02-21 - Batch upload response DTOs (Phase 5.2)
+// Argha - 2026-02-21 - Batch upload response DTOs 
 
 /// <summary>
 /// Summary response returned by POST /api/documents/batch

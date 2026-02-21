@@ -1,4 +1,4 @@
-// Argha - 2026-02-21 - Configuration for batch document upload (Phase 5.2)
+// Argha - 2026-02-21 - Configuration for batch document upload 
 namespace RagApi.Application.Models;
 
 /// <summary>

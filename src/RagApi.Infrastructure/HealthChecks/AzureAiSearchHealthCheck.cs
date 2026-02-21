@@ -1,4 +1,4 @@
-// Argha - 2026-02-21 - Health check for Azure AI Search (Phase 5.1)
+// Argha - 2026-02-21 - Health check for Azure AI Search 
 using Azure.Search.Documents.Indexes;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;

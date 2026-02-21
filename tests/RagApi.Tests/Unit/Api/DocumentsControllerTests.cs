@@ -42,7 +42,7 @@ public class DocumentsControllerTests
             _repositoryMock.Object,
             Options.Create(new DocumentProcessingOptions()));
 
-        // Argha - 2026-02-21 - Pass default BatchUploadOptions to satisfy new constructor parameter (Phase 5.2)
+        // Argha - 2026-02-21 - Pass default BatchUploadOptions to satisfy new constructor parameter 
         _sut = new DocumentsController(documentService, Options.Create(new BatchUploadOptions()));
     }
 
@@ -180,7 +180,121 @@ public class DocumentsControllerTests
         result.Should().BeOfType<NotFoundObjectResult>();
     }
 
-    // Argha - 2026-02-19 - Tag-related controller tests 
+    // Argha - 2026-02-21 - Helpers for update tests 
+
+    private static IFormFile CreateFileMock(string fileName = "updated.txt", string contentType = "text/plain", long length = 100)
+    {
+        var fileMock = new Mock<IFormFile>();
+        fileMock.Setup(f => f.FileName).Returns(fileName);
+        fileMock.Setup(f => f.ContentType).Returns(contentType);
+        fileMock.Setup(f => f.Length).Returns(length);
+        fileMock.Setup(f => f.OpenReadStream()).Returns(new MemoryStream(new byte[] { 1 }));
+        return fileMock.Object;
+    }
+
+    private void SetupSuccessfulProcessing(string extractedText)
+    {
+        var chunks = new List<DocumentChunk>
+        {
+            new() { Content = extractedText, Metadata = new Dictionary<string, string>() }
+        };
+        _processorMock.Setup(p => p.ExtractTextAsync(It.IsAny<Stream>(), "text/plain", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(extractedText);
+        _processorMock.Setup(p => p.ChunkText(It.IsAny<Guid>(), extractedText, It.IsAny<ChunkingOptions?>()))
+            .Returns(chunks);
+        _embeddingMock.Setup(e => e.GenerateEmbeddingsAsync(It.IsAny<List<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<float[]> { new float[768] });
+    }
+
+    // Argha - 2026-02-21 - Tests for PUT /api/documents/{id} 
+
+    [Fact]
+    public async Task UpdateDocument_NoFile_Returns400()
+    {
+        // Act
+        var result = await _sut.UpdateDocument(Guid.NewGuid(), null!, null, null, CancellationToken.None);
+
+        // Assert
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task UpdateDocument_InvalidChunkingStrategy_Returns400()
+    {
+        // Act
+        var result = await _sut.UpdateDocument(Guid.NewGuid(), CreateFileMock(), null, "garbage", CancellationToken.None);
+
+        // Assert
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task UpdateDocument_DocumentNotFound_Returns404()
+    {
+        // Arrange
+        _repositoryMock.Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Document?)null);
+
+        // Act
+        var result = await _sut.UpdateDocument(Guid.NewGuid(), CreateFileMock(), null, null, CancellationToken.None);
+
+        // Assert
+        result.Should().BeOfType<NotFoundObjectResult>();
+    }
+
+    [Fact]
+    public async Task UpdateDocument_UnsupportedContentType_Returns400()
+    {
+        // Arrange
+        var docId = Guid.NewGuid();
+        var existingDoc = new Document { Id = docId, FileName = "old.txt" };
+        _repositoryMock.Setup(r => r.GetByIdAsync(docId, It.IsAny<CancellationToken>())).ReturnsAsync(existingDoc);
+        _processorMock.Setup(p => p.IsSupported("image/png")).Returns(false);
+
+        // Act
+        var result = await _sut.UpdateDocument(docId, CreateFileMock("photo.png", "image/png"), null, null, CancellationToken.None);
+
+        // Assert
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task UpdateDocument_ValidRequest_Returns200WithDto()
+    {
+        // Arrange
+        var docId = Guid.NewGuid();
+        var existingDoc = new Document { Id = docId, FileName = "old.txt" };
+        _repositoryMock.Setup(r => r.GetByIdAsync(docId, It.IsAny<CancellationToken>())).ReturnsAsync(existingDoc);
+        SetupSuccessfulProcessing("New content");
+
+        // Act
+        var result = await _sut.UpdateDocument(docId, CreateFileMock(), null, null, CancellationToken.None);
+
+        // Assert
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var dto = ok.Value.Should().BeOfType<DocumentDto>().Subject;
+        dto.Id.Should().Be(docId);
+    }
+
+    [Fact]
+    public async Task UpdateDocument_ValidRequest_UpdatedAtPopulatedInDto()
+    {
+        // Arrange
+        var docId = Guid.NewGuid();
+        var existingDoc = new Document { Id = docId, FileName = "old.txt" };
+        _repositoryMock.Setup(r => r.GetByIdAsync(docId, It.IsAny<CancellationToken>())).ReturnsAsync(existingDoc);
+        SetupSuccessfulProcessing("New content");
+
+        // Act
+        var result = await _sut.UpdateDocument(docId, CreateFileMock(), null, null, CancellationToken.None);
+
+        // Assert
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var dto = ok.Value.Should().BeOfType<DocumentDto>().Subject;
+        dto.UpdatedAt.Should().NotBeNull();
+    }
+
+    // Argha - 2026-02-19 - Tag-related controller tests
 
     [Fact]
     public async Task Upload_WithTags_IncludesTagsInDto()

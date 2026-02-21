@@ -47,7 +47,7 @@ public class QdrantConfiguration
     public string? ApiKey { get; set; }
 }
 
-// Argha - 2026-02-21 - Vector store provider switching (Phase 5.1)
+// Argha - 2026-02-21 - Vector store provider switching 
 /// <summary>
 /// Top-level configuration for the vector store backend selection
 /// </summary>

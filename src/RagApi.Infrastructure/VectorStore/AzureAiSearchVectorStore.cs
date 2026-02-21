@@ -1,4 +1,4 @@
-// Argha - 2026-02-21 - Azure AI Search IVectorStore implementation (Phase 5.1)
+// Argha - 2026-02-21 - Azure AI Search IVectorStore implementation 
 using Azure;
 using Azure.Search.Documents;
 using Azure.Search.Documents.Indexes;

@@ -29,7 +29,8 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **.NE
 - **Rate limiting** — Configurable fixed-window rate limiter keyed by IP; opt-in via `RateLimit:Enabled`; health check always exempt
 - **Production CORS** — Configurable allowed origins via `appsettings.json`; empty list = allow any (dev default)
 - **FluentValidation** — Rich input validation for Tags list constraints and `ConversationMessage.Role` allowlist
-- **181 unit tests** — xUnit + Moq + FluentAssertions covering all layers
+- **Document update & re-process** — Replace document content in-place with `PUT /api/documents/{id}`; preserves ID, updates vector index
+- **193 unit tests** — xUnit + Moq + FluentAssertions covering all layers
 - **Docker-ready** — One command to spin up all dependencies
 - **Swagger UI** — Interactive API documentation at the root URL
 
@@ -146,6 +147,7 @@ setup.bat
 | `POST` | `/api/documents/batch` | Upload 1–20 documents in one request; returns per-file results |
 | `GET` | `/api/documents` | List all documents; optional `?tag=` query filter |
 | `GET` | `/api/documents/{id}` | Get document by ID |
+| `PUT` | `/api/documents/{id}` | Replace document content and re-process; preserves ID |
 | `DELETE` | `/api/documents/{id}` | Delete a document and its vector data |
 | `GET` | `/api/documents/supported-types` | List supported file types |
 
@@ -343,10 +345,10 @@ dotnet-rag-api/
 - [x] Production CORS configuration
 - [x] Input validation (FluentValidation)
 
-### Phase 5: Advanced Features ✅ 
-- [x] Azure AI Search integration 
+### Phase 5: Advanced Features ✅
+- [x] Azure AI Search integration
 - [x] Batch document upload
-- [ ] Document update & re-process
+- [x] Document update & re-process
 - [ ] Export conversation history
 
 ### Phase 6: Frontend & DevOps

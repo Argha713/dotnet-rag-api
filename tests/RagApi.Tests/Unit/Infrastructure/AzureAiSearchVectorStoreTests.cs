@@ -1,4 +1,4 @@
-// Argha - 2026-02-21 - Unit tests for AzureAiSearchVectorStore and AzureAiSearchHealthCheck (Phase 5.1)
+// Argha - 2026-02-21 - Unit tests for AzureAiSearchVectorStore and AzureAiSearchHealthCheck 
 using Azure;
 using Azure.Search.Documents;
 using Azure.Search.Documents.Indexes;

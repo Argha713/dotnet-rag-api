@@ -17,7 +17,7 @@ namespace RagApi.Api.Controllers;
 public class DocumentsController : ControllerBase
 {
     private readonly DocumentService _documentService;
-    // Argha - 2026-02-21 - Batch upload options for file count validation (Phase 5.2)
+    // Argha - 2026-02-21 - Batch upload options for file count validation 
     private readonly BatchUploadOptions _batchOptions;
 
     public DocumentsController(
@@ -79,7 +79,7 @@ public class DocumentsController : ControllerBase
         return CreatedAtAction(nameof(GetDocument), new { id = document.Id }, dto);
     }
 
-    // Argha - 2026-02-21 - Batch upload endpoint: multiple files, shared tags + strategy (Phase 5.2)
+    // Argha - 2026-02-21 - Batch upload endpoint: multiple files, shared tags + strategy 
     /// <summary>
     /// Upload multiple documents in a single request.
     /// Returns 200 with per-file results even when some files fail (partial success is valid).
@@ -142,6 +142,70 @@ public class DocumentsController : ControllerBase
         };
 
         return Ok(dto);
+    }
+
+    // Argha - 2026-02-21 - Update (replace) an existing document with a new file 
+    /// <summary>
+    /// Replace an existing document's content and re-process it.
+    /// The document ID is preserved; old vector chunks are deleted and new ones are generated.
+    /// </summary>
+    /// <param name="id">The ID of the document to update</param>
+    /// <param name="file">The replacement file (PDF, DOCX, TXT)</param>
+    /// <param name="tags">Optional new tags — replaces all existing tags</param>
+    /// <param name="chunkingStrategy">Optional chunking strategy override</param>
+    [HttpPut("{id:guid}")]
+    [RequestSizeLimit(50_000_000)]
+    [ProducesResponseType(typeof(DocumentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateDocument(
+        Guid id,
+        IFormFile file,
+        [FromForm] List<string>? tags,
+        [FromForm] string? chunkingStrategy,
+        CancellationToken cancellationToken)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new { error = "No file provided" });
+        }
+
+        // Argha - 2026-02-21 - Validate chunkingStrategy string before calling service
+        ChunkingStrategy? parsedStrategy = null;
+        if (!string.IsNullOrWhiteSpace(chunkingStrategy))
+        {
+            if (!Enum.TryParse<ChunkingStrategy>(chunkingStrategy, ignoreCase: true, out var s))
+            {
+                return BadRequest(new
+                {
+                    error = $"Invalid chunkingStrategy '{chunkingStrategy}'. Valid values: {string.Join(", ", Enum.GetNames<ChunkingStrategy>())}"
+                });
+            }
+            parsedStrategy = s;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            var document = await _documentService.UpdateDocumentAsync(
+                id,
+                stream,
+                file.FileName,
+                file.ContentType,
+                tags,
+                parsedStrategy,
+                cancellationToken);
+
+            return Ok(MapToDto(document));
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { error = "Document not found" });
+        }
+        catch (NotSupportedException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     /// <summary>
@@ -213,8 +277,10 @@ public class DocumentsController : ControllerBase
             Status = document.Status.ToString(),
             ChunkCount = document.ChunkCount,
             ErrorMessage = document.ErrorMessage,
-            // Argha - 2026-02-19 - Deserialize TagsJson for API response 
-            Tags = JsonSerializer.Deserialize<List<string>>(document.TagsJson) ?? new List<string>()
+            // Argha - 2026-02-19 - Deserialize TagsJson for API response
+            Tags = JsonSerializer.Deserialize<List<string>>(document.TagsJson) ?? new List<string>(),
+            // Argha - 2026-02-21 - Null for documents never re-processed 
+            UpdatedAt = document.UpdatedAt
         };
     }
 }

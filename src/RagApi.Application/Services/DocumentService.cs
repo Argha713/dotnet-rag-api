@@ -25,11 +25,11 @@ public class DocumentService
     // Argha - 2026-02-15 - Commented out: replaced with SQLite via IDocumentRepository 
     // private static readonly ConcurrentDictionary<Guid, Document> _documents = new();
 
-    // Argha - 2026-02-21 - Batch upload options for concurrency and file count limits (Phase 5.2)
+    // Argha - 2026-02-21 - Batch upload options for concurrency and file count limits 
     private readonly BatchUploadOptions _batchOptions;
 
     // Argha - 2026-02-20 - Added IOptions<DocumentProcessingOptions> for configurable chunking
-    // Argha - 2026-02-21 - Added IOptions<BatchUploadOptions> for batch upload settings (Phase 5.2)
+    // Argha - 2026-02-21 - Added IOptions<BatchUploadOptions> for batch upload settings 
     public DocumentService(
         IDocumentProcessor documentProcessor,
         IEmbeddingService embeddingService,
@@ -155,6 +155,118 @@ public class DocumentService
         }
     }
 
+    // Argha - 2026-02-21 - Update an existing document: replace content and re-process from scratch 
+    /// <summary>
+    /// Replace an existing document's content and re-process it.
+    /// Deletes old vector chunks, runs the full extract → chunk → embed → upsert pipeline,
+    /// and updates the SQLite record. The document ID is preserved.
+    /// Throws <see cref="KeyNotFoundException"/> if the document does not exist.
+    /// Throws <see cref="NotSupportedException"/> if the new content type is unsupported.
+    /// </summary>
+    public async Task<Document> UpdateDocumentAsync(
+        Guid documentId,
+        Stream fileStream,
+        string fileName,
+        string contentType,
+        List<string>? tags = null,
+        ChunkingStrategy? chunkingStrategy = null,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Updating document {DocumentId}: {FileName} ({ContentType})", documentId, fileName, contentType);
+
+        // Argha - 2026-02-21 - Fetch existing record first; 404 semantics handled by caller
+        var document = await _documentRepository.GetByIdAsync(documentId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Document '{documentId}' not found.");
+
+        // Argha - 2026-02-21 - Validate new content type before touching any state
+        if (!_documentProcessor.IsSupported(contentType))
+        {
+            throw new NotSupportedException(
+                $"Content type '{contentType}' is not supported. Supported types: {string.Join(", ", _documentProcessor.SupportedContentTypes)}");
+        }
+
+        var normalizedTags = tags ?? new List<string>();
+
+        // Argha - 2026-02-21 - Mark as Processing immediately so callers know re-process is in flight
+        document.Status = DocumentStatus.Processing;
+        document.UpdatedAt = DateTime.UtcNow;
+        await _documentRepository.UpdateAsync(document, cancellationToken);
+
+        try
+        {
+            // Step 1: Remove old vectors so stale chunks don't remain in the index
+            _logger.LogDebug("Deleting old chunks for document {DocumentId}", documentId);
+            await _vectorStore.DeleteDocumentChunksAsync(documentId, cancellationToken);
+
+            // Step 2: Extract text from the new file
+            _logger.LogDebug("Extracting text from updated document {DocumentId}", documentId);
+            var text = await _documentProcessor.ExtractTextAsync(fileStream, contentType, cancellationToken);
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                throw new InvalidOperationException("No text content could be extracted from the document.");
+            }
+
+            _logger.LogDebug("Extracted {Length} characters from updated document", text.Length);
+
+            // Step 3: Chunk with the effective strategy
+            var effectiveStrategy = chunkingStrategy
+                ?? (Enum.TryParse<ChunkingStrategy>(_processingOptions.DefaultChunkingStrategy, ignoreCase: true, out var parsed)
+                    ? parsed
+                    : ChunkingStrategy.Fixed);
+
+            var chunkingOptions = new ChunkingOptions
+            {
+                ChunkSize = _processingOptions.ChunkSize,
+                ChunkOverlap = _processingOptions.ChunkOverlap,
+                Strategy = effectiveStrategy
+            };
+
+            var chunks = _documentProcessor.ChunkText(documentId, text, chunkingOptions);
+            _logger.LogDebug("Created {Count} chunks from updated document", chunks.Count);
+
+            // Step 4: Generate embeddings
+            var chunkTexts = chunks.Select(c => c.Content).ToList();
+            var embeddings = await _embeddingService.GenerateEmbeddingsAsync(chunkTexts, cancellationToken);
+
+            for (int i = 0; i < chunks.Count; i++)
+            {
+                chunks[i].Embedding = embeddings[i];
+                chunks[i].Metadata["fileName"] = fileName;
+                chunks[i].Metadata["contentType"] = contentType;
+                chunks[i].Tags = normalizedTags;
+            }
+
+            // Step 5: Store new chunks
+            await _vectorStore.UpsertChunksAsync(chunks, cancellationToken);
+
+            // Step 6: Persist updated metadata
+            document.FileName = fileName;
+            document.ContentType = contentType;
+            document.FileSize = fileStream.Length;
+            document.TagsJson = JsonSerializer.Serialize(normalizedTags);
+            document.Status = DocumentStatus.Completed;
+            document.ChunkCount = chunks.Count;
+            document.UpdatedAt = DateTime.UtcNow;
+            document.ErrorMessage = null;
+            await _documentRepository.UpdateAsync(document, cancellationToken);
+
+            _logger.LogInformation(
+                "Document {DocumentId} re-processed successfully. {ChunkCount} chunks stored.",
+                documentId, chunks.Count);
+
+            return document;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to re-process document {DocumentId}", documentId);
+            document.Status = DocumentStatus.Failed;
+            document.ErrorMessage = ex.Message;
+            await _documentRepository.UpdateAsync(document, cancellationToken);
+            throw;
+        }
+    }
+
     /// <summary>
     /// Get document by ID
     /// </summary>
@@ -211,7 +323,7 @@ public class DocumentService
         return _documentProcessor.SupportedContentTypes;
     }
 
-    // Argha - 2026-02-21 - Batch upload: process multiple files concurrently with bounded parallelism (Phase 5.2)
+    // Argha - 2026-02-21 - Batch upload: process multiple files concurrently with bounded parallelism 
     /// <summary>
     /// Upload and process multiple documents concurrently.
     /// Partial failure is allowed — exceptions per file are caught and returned as failed results,
@@ -281,7 +393,7 @@ public class DocumentService
     }
 }
 
-// Argha - 2026-02-21 - Internal result model for batch upload, mapped to DTO at the controller layer (Phase 5.2)
+// Argha - 2026-02-21 - Internal result model for batch upload, mapped to DTO at the controller layer 
 /// <summary>
 /// Per-file result produced by DocumentService.BatchUploadDocumentsAsync
 /// </summary>

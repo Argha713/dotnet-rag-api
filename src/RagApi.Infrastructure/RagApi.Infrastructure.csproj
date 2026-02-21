@@ -19,7 +19,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.8" />
     <!-- Argha - 2026-02-15 - Added for real health checks  -->
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="8.0.8" />
-    <!-- Argha - 2026-02-21 - Azure AI Search vector store provider (Phase 5.1) -->
+    <!-- Argha - 2026-02-21 - Azure AI Search vector store provider  -->
     <PackageReference Include="Azure.Search.Documents" Version="11.6.0" />
   </ItemGroup>
 

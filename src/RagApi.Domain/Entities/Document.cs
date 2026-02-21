@@ -14,8 +14,11 @@ public class Document
     public int ChunkCount { get; set; }
     public string? ErrorMessage { get; set; }
 
-    // Argha - 2026-02-19 - JSON array of tags for metadata filtering 
+    // Argha - 2026-02-19 - JSON array of tags for metadata filtering
     public string TagsJson { get; set; } = "[]";
+
+    // Argha - 2026-02-21 - Timestamp of last re-process; null for documents never updated 
+    public DateTime? UpdatedAt { get; set; }
 }
 
 public enum DocumentStatus

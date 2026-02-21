@@ -27,9 +27,9 @@ public static class DependencyInjection
         services.Configure<SearchOptions>(configuration.GetSection(SearchOptions.SectionName));
         // Argha - 2026-02-20 - Register DocumentProcessingOptions for configurable chunking 
         services.Configure<DocumentProcessingOptions>(configuration.GetSection(DocumentProcessingOptions.SectionName));
-        // Argha - 2026-02-21 - Register VectorStoreConfiguration for provider switching (Phase 5.1)
+        // Argha - 2026-02-21 - Register VectorStoreConfiguration for provider switching 
         services.Configure<VectorStoreConfiguration>(configuration.GetSection(VectorStoreConfiguration.SectionName));
-        // Argha - 2026-02-21 - Register BatchUploadOptions for concurrent batch document upload (Phase 5.2)
+        // Argha - 2026-02-21 - Register BatchUploadOptions for concurrent batch document upload 
         services.Configure<BatchUploadOptions>(configuration.GetSection(BatchUploadOptions.SectionName));
 
         var aiConfig = configuration.GetSection(AiConfiguration.SectionName).Get<AiConfiguration>() 
@@ -47,7 +47,7 @@ public static class DependencyInjection
             services.AddHttpClient<IChatService, OllamaChatService>();
         }
 
-        // Argha - 2026-02-21 - Switch vector store backend based on VectorStore:Provider (Phase 5.1)
+        // Argha - 2026-02-21 - Switch vector store backend based on VectorStore:Provider 
         var vectorStoreConfig = configuration.GetSection(VectorStoreConfiguration.SectionName)
             .Get<VectorStoreConfiguration>() ?? new VectorStoreConfiguration();
 
@@ -89,7 +89,7 @@ public static class DependencyInjection
         var healthChecks = services.AddHealthChecks()
             .AddCheck<SqliteHealthCheck>("sqlite", tags: ["dependency"]);
 
-        // Argha - 2026-02-21 - Register vector store health check based on active provider (Phase 5.1)
+        // Argha - 2026-02-21 - Register vector store health check based on active provider 
         if (vectorStoreConfig.Provider.Equals("AzureAiSearch", StringComparison.OrdinalIgnoreCase))
         {
             healthChecks.AddCheck<AzureAiSearchHealthCheck>("azure-ai-search", tags: ["dependency"]);

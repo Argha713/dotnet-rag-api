@@ -154,12 +154,20 @@ using (var scope = app.Services.CreateScope())
         )
     ");
 
-    // Argha - 2026-02-19 - Add TagsJson column to existing Documents tables 
+    // Argha - 2026-02-19 - Add TagsJson column to existing Documents tables
     // SQLite does not support DROP COLUMN; catch and ignore if column already exists
     try
     {
         await dbContext.Database.ExecuteSqlRawAsync(
             "ALTER TABLE Documents ADD COLUMN TagsJson TEXT NOT NULL DEFAULT '[]'");
+    }
+    catch { /* Column already exists — safe to ignore */ }
+
+    // Argha - 2026-02-21 - Add UpdatedAt column to existing Documents tables 
+    try
+    {
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE Documents ADD COLUMN UpdatedAt TEXT NULL");
     }
     catch { /* Column already exists — safe to ignore */ }
 }
