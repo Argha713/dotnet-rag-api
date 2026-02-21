@@ -84,6 +84,8 @@ public static class DependencyInjection
         services.AddScoped<RagService>();
         services.AddScoped<DocumentService>();
         services.AddScoped<ConversationService>();
+        // Argha - 2026-02-21 - Conversation export service registered
+        services.AddScoped<ConversationExportService>();
 
         // Argha - 2026-02-15 - Real health checks for all dependencies 
         var healthChecks = services.AddHealthChecks()

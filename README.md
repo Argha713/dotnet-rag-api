@@ -30,7 +30,8 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **.NE
 - **Production CORS** — Configurable allowed origins via `appsettings.json`; empty list = allow any (dev default)
 - **FluentValidation** — Rich input validation for Tags list constraints and `ConversationMessage.Role` allowlist
 - **Document update & re-process** — Replace document content in-place with `PUT /api/documents/{id}`; preserves ID, updates vector index
-- **193 unit tests** — xUnit + Moq + FluentAssertions covering all layers
+- **Export conversation history** — Download any session as JSON, Markdown, or plain text via `GET /api/conversations/{id}/export`
+- **207 unit tests** — xUnit + Moq + FluentAssertions covering all layers
 - **Docker-ready** — One command to spin up all dependencies
 - **Swagger UI** — Interactive API documentation at the root URL
 
@@ -157,6 +158,15 @@ setup.bat
 |--------|----------|-------------|
 | `POST` | `/api/chat` | Ask a question (RAG-powered) |
 | `POST` | `/api/chat/search` | Semantic search only (no LLM) |
+
+### Conversations
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/conversations` | Create a new session |
+| `GET` | `/api/conversations/{id}` | Get session with full message history |
+| `GET` | `/api/conversations/{id}/export` | Download session as JSON, Markdown, or text (`?format=json\|markdown\|text`) |
+| `DELETE` | `/api/conversations/{id}` | Delete a session |
 
 ### System
 
@@ -349,7 +359,7 @@ dotnet-rag-api/
 - [x] Azure AI Search integration
 - [x] Batch document upload
 - [x] Document update & re-process
-- [ ] Export conversation history
+- [x] Export conversation history
 
 ### Phase 6: Frontend & DevOps
 - [ ] Structured logging (Serilog)

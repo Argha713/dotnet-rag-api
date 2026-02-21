@@ -26,7 +26,10 @@ public class ConversationsControllerTests
             _repoMock.Object,
             Mock.Of<ILogger<ConversationService>>());
 
-        _sut = new ConversationsController(conversationService);
+        // Argha - 2026-02-21 - Pass ConversationExportService now required by controller 
+        var exportService = new ConversationExportService(conversationService);
+
+        _sut = new ConversationsController(conversationService, exportService);
     }
 
     [Fact]

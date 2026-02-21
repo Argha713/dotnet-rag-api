@@ -5,7 +5,7 @@ using RagApi.Application.Services;
 
 namespace RagApi.Api.Controllers;
 
-// Argha - 2026-02-19 - CRUD controller for server-side conversation sessions 
+// Argha - 2026-02-19 - CRUD controller for server-side conversation sessions
 
 /// <summary>
 /// Controller for managing server-side conversation sessions
@@ -16,13 +16,18 @@ namespace RagApi.Api.Controllers;
 public class ConversationsController : ControllerBase
 {
     private readonly ConversationService _conversationService;
+    // Argha - 2026-02-21 - Export service
+    private readonly ConversationExportService _exportService;
 
     // Argha - 2026-02-19 - Deserializing ChatMessage JSON (PascalCase) into SessionMessageDto
     private static readonly JsonSerializerOptions JsonOpts = new();
 
-    public ConversationsController(ConversationService conversationService)
+    public ConversationsController(
+        ConversationService conversationService,
+        ConversationExportService exportService)
     {
         _conversationService = conversationService;
+        _exportService = exportService;
     }
 
     /// <summary>
@@ -82,5 +87,38 @@ public class ConversationsController : ControllerBase
     {
         var deleted = await _conversationService.DeleteSessionAsync(id, cancellationToken);
         return deleted ? NoContent() : NotFound();
+    }
+
+    // Argha - 2026-02-21 - Export conversation session as a downloadable file
+
+    /// <summary>
+    /// Export a conversation session as a downloadable file.
+    /// Supported formats: json (default), markdown (md), text (txt).
+    /// </summary>
+    /// <param name="id">Session ID</param>
+    /// <param name="format">Export format: json, markdown, md, text, or txt</param>
+    [HttpGet("{id:guid}/export")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ExportSession(
+        Guid id,
+        [FromQuery] string format = "json",
+        CancellationToken cancellationToken = default)
+    {
+        ConversationExportResult? result;
+
+        try
+        {
+            result = await _exportService.ExportAsync(id, format, cancellationToken);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+
+        if (result == null) return NotFound();
+
+        return File(result.Content, result.ContentType, result.FileName);
     }
 }
