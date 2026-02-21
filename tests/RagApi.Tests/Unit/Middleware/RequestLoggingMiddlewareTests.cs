@@ -67,6 +67,58 @@ public class RequestLoggingMiddlewareTests
             Times.Once);
     }
 
+    // Argha - 2026-02-21 - Correlation ID tests for Phase 6.1
+
+    [Fact]
+    public async Task Invoke_NoCorrelationIdHeader_SetsNewCorrelationIdOnResponse()
+    {
+        // Arrange
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.Path = "/test";
+        // No X-Correlation-ID on request
+
+        RequestDelegate next = ctx =>
+        {
+            ctx.Response.StatusCode = 200;
+            return Task.CompletedTask;
+        };
+
+        var middleware = new RequestLoggingMiddleware(next, _loggerMock.Object);
+
+        // Act
+        await middleware.InvokeAsync(context);
+
+        // Assert
+        var responseHeader = context.Response.Headers["X-Correlation-ID"].ToString();
+        responseHeader.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task Invoke_WithExistingCorrelationIdHeader_EchoesIdOnResponse()
+    {
+        // Arrange
+        const string existingId = "my-test-correlation-id";
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.Path = "/test";
+        context.Request.Headers["X-Correlation-ID"] = existingId;
+
+        RequestDelegate next = ctx =>
+        {
+            ctx.Response.StatusCode = 200;
+            return Task.CompletedTask;
+        };
+
+        var middleware = new RequestLoggingMiddleware(next, _loggerMock.Object);
+
+        // Act
+        await middleware.InvokeAsync(context);
+
+        // Assert
+        context.Response.Headers["X-Correlation-ID"].ToString().Should().Be(existingId);
+    }
+
     private async Task InvokeWithStatusCode(int statusCode)
     {
         var context = new DefaultHttpContext();

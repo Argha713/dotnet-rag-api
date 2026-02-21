@@ -11,8 +11,13 @@ using RagApi.Application.Interfaces;
 using RagApi.Application.Models;
 using RagApi.Infrastructure;
 using RagApi.Infrastructure.Data;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Argha - 2026-02-21 - Replace default logging with Serilog; all sinks and levels configured in appsettings.json (Phase 6.1)
+builder.Host.UseSerilog((context, configuration) =>
+    configuration.ReadFrom.Configuration(context.Configuration));
 
 // Add services to the container
 builder.Services.AddControllers();

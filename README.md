@@ -31,7 +31,8 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **.NE
 - **FluentValidation** — Rich input validation for Tags list constraints and `ConversationMessage.Role` allowlist
 - **Document update & re-process** — Replace document content in-place with `PUT /api/documents/{id}`; preserves ID, updates vector index
 - **Export conversation history** — Download any session as JSON, Markdown, or plain text via `GET /api/conversations/{id}/export`
-- **207 unit tests** — xUnit + Moq + FluentAssertions covering all layers
+- **Structured logging (Serilog)** — Rolling daily log files, per-request correlation IDs (`X-Correlation-ID`), and enriched console output; all configured via `appsettings.json`
+- **209 unit tests** — xUnit + Moq + FluentAssertions covering all layers
 - **Docker-ready** — One command to spin up all dependencies
 - **Swagger UI** — Interactive API documentation at the root URL
 
@@ -294,6 +295,7 @@ Qdrant__Port=6334
 | **PDF Parsing** | PdfPig |
 | **DOCX Parsing** | DocumentFormat.OpenXml |
 | **Database** | SQLite + Entity Framework Core |
+| **Logging** | Serilog (Console + File sinks, structured) |
 | **Testing** | xUnit, Moq, FluentAssertions |
 | **API Docs** | Swagger / OpenAPI |
 
@@ -361,8 +363,8 @@ dotnet-rag-api/
 - [x] Document update & re-process
 - [x] Export conversation history
 
-### Phase 6: Frontend & DevOps
-- [ ] Structured logging (Serilog)
+### Phase 6: Frontend & DevOps ✅
+- [x] Structured logging (Serilog)
 - [ ] GitHub Actions CI/CD
 - [ ] Blazor WebAssembly chat UI
 - [ ] Full Docker Compose (API + UI + services)

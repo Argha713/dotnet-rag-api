@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Serilog.Context;
 
 namespace RagApi.Api.Middleware;
 
@@ -16,30 +17,38 @@ public class RequestLoggingMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        var stopwatch = Stopwatch.StartNew();
+        // Argha - 2026-02-21 - Read or generate correlation ID; propagate on response header and push to Serilog LogContext (Phase 6.1)
+        var correlationId = context.Request.Headers["X-Correlation-ID"].FirstOrDefault()
+                            ?? Guid.NewGuid().ToString("N");
+        context.Response.Headers["X-Correlation-ID"] = correlationId;
 
-        await _next(context);
-
-        stopwatch.Stop();
-
-        var statusCode = context.Response.StatusCode;
-        var method = context.Request.Method;
-        var path = context.Request.Path;
-
-        if (statusCode >= 500)
+        using (LogContext.PushProperty("CorrelationId", correlationId))
         {
-            _logger.LogError("{Method} {Path} responded {StatusCode} in {Elapsed}ms",
-                method, path, statusCode, stopwatch.ElapsedMilliseconds);
-        }
-        else if (statusCode >= 400)
-        {
-            _logger.LogWarning("{Method} {Path} responded {StatusCode} in {Elapsed}ms",
-                method, path, statusCode, stopwatch.ElapsedMilliseconds);
-        }
-        else
-        {
-            _logger.LogInformation("{Method} {Path} responded {StatusCode} in {Elapsed}ms",
-                method, path, statusCode, stopwatch.ElapsedMilliseconds);
+            var stopwatch = Stopwatch.StartNew();
+
+            await _next(context);
+
+            stopwatch.Stop();
+
+            var statusCode = context.Response.StatusCode;
+            var method = context.Request.Method;
+            var path = context.Request.Path;
+
+            if (statusCode >= 500)
+            {
+                _logger.LogError("{Method} {Path} responded {StatusCode} in {Elapsed}ms",
+                    method, path, statusCode, stopwatch.ElapsedMilliseconds);
+            }
+            else if (statusCode >= 400)
+            {
+                _logger.LogWarning("{Method} {Path} responded {StatusCode} in {Elapsed}ms",
+                    method, path, statusCode, stopwatch.ElapsedMilliseconds);
+            }
+            else
+            {
+                _logger.LogInformation("{Method} {Path} responded {StatusCode} in {Elapsed}ms",
+                    method, path, statusCode, stopwatch.ElapsedMilliseconds);
+            }
         }
     }
 }
