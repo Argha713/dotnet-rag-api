@@ -20,7 +20,7 @@ public interface IVectorStore
     /// <summary>
     /// Search for similar chunks using a query embedding
     /// </summary>
-    // Argha - 2026-02-19 - Added filterByTags parameter for metadata tag filtering (Phase 2.3)
+    // Argha - 2026-02-19 - Added filterByTags parameter for metadata tag filtering 
     Task<List<SearchResult>> SearchAsync(
         float[] queryEmbedding,
         int topK = 5,
@@ -32,7 +32,7 @@ public interface IVectorStore
     /// Search for similar chunks and include their vector embeddings in the results.
     /// Used by MMR re-ranking which needs cross-similarities between result chunks.
     /// </summary>
-    // Argha - 2026-02-20 - Returns results with Embedding populated for MMR re-ranking (Phase 3.2)
+    // Argha - 2026-02-20 - Returns results with Embedding populated for MMR re-ranking 
     Task<List<SearchResult>> SearchWithEmbeddingsAsync(
         float[] queryEmbedding,
         int topK = 5,
@@ -44,7 +44,7 @@ public interface IVectorStore
     /// Search for chunks matching a keyword query using full-text index.
     /// Returns results with Score = 1.0 (rank-based fusion is applied by the caller).
     /// </summary>
-    // Argha - 2026-02-20 - Keyword search for hybrid search feature (Phase 3.1)
+    // Argha - 2026-02-20 - Keyword search for hybrid search feature 
     Task<List<SearchResult>> KeywordSearchAsync(
         string query,
         int topK = 5,

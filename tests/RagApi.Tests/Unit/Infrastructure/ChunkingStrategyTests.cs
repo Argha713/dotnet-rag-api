@@ -12,7 +12,7 @@ using RagApi.Infrastructure.DocumentProcessing;
 
 namespace RagApi.Tests.Unit.Infrastructure;
 
-// Argha - 2026-02-20 - Unit tests for configurable chunking strategies (Phase 3.3)
+// Argha - 2026-02-20 - Unit tests for configurable chunking strategies 
 public class ChunkingStrategyTests
 {
     private readonly DocumentProcessor _processor;

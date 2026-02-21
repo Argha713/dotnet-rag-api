@@ -3,7 +3,7 @@ using RagApi.Api.Models;
 
 namespace RagApi.Api.Validators;
 
-// Argha - 2026-02-20 - Validates ConversationMessage Role and Content (Phase 4.2)
+// Argha - 2026-02-20 - Validates ConversationMessage Role and Content 
 // Role must be exactly "user" or "assistant" (case-insensitive).
 // Content has a 10,000-char ceiling to prevent oversized context payloads.
 public class ConversationMessageValidator : AbstractValidator<ConversationMessage>

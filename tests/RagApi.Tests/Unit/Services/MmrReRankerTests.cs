@@ -4,7 +4,7 @@ using RagApi.Domain.Entities;
 
 namespace RagApi.Tests.Unit.Services;
 
-// Argha - 2026-02-20 - Unit tests for MMR re-ranking algorithm (Phase 3.2)
+// Argha - 2026-02-20 - Unit tests for MMR re-ranking algorithm 
 public class MmrReRankerTests
 {
     [Fact]
@@ -91,7 +91,7 @@ public class MmrReRankerTests
         var chunkC = MakeCandidate(embedding: new float[] { 0f, 1f }, score: 0.7); // orthogonal to A
 
         var candidates = new List<SearchResult> { chunkA, chunkB, chunkC };
-        // Argha - 2026-02-20 - Diagonal query ensures chunkC clearly beats chunkB after A is selected (Phase 3.2)
+        // Argha - 2026-02-20 - Diagonal query ensures chunkC clearly beats chunkB after A is selected 
         var queryEmbedding = new float[] { 1f, 1f }; // 45° — equally aligned with both dimensions
 
         var result = MmrReRanker.Rerank(candidates, queryEmbedding, topK: 2, lambda: 0.5);

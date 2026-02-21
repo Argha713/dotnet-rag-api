@@ -6,12 +6,12 @@ using RagApi.Api.Middleware;
 
 namespace RagApi.Tests.Unit.Middleware;
 
-// Argha - 2026-02-20 - Unit tests for ApiKeyMiddleware (Phase 4.1)
+// Argha - 2026-02-20 - Unit tests for ApiKeyMiddleware 
 public class ApiKeyMiddlewareTests
 {
     private const string ValidKey = "test-api-key-123";
 
-    // Argha - 2026-02-20 - Helper: build IConfiguration with a given ApiKey value (Phase 4.1)
+    // Argha - 2026-02-20 - Helper: build IConfiguration with a given ApiKey value 
     private static IConfiguration BuildConfig(string? apiKey) =>
         new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>

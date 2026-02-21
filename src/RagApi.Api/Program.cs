@@ -32,7 +32,7 @@ builder.Services.AddSwaggerGen(options =>
         }
     });
 
-    // Argha - 2026-02-20 - Add API key security definition so Swagger UI shows Authorize button (Phase 4.1)
+    // Argha - 2026-02-20 - Add API key security definition so Swagger UI shows Authorize button 
     options.AddSecurityDefinition("ApiKey", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
         Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
@@ -57,7 +57,7 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// Argha - 2026-02-20 - Configurable CORS: empty AllowedOrigins = allow any (dev); specify origins for production (Phase 4.2)
+// Argha - 2026-02-20 - Configurable CORS: empty AllowedOrigins = allow any (dev); specify origins for production 
 var corsSettings = builder.Configuration.GetSection("Cors").Get<CorsSettings>() ?? new CorsSettings();
 builder.Services.AddCors(options =>
 {
@@ -65,14 +65,14 @@ builder.Services.AddCors(options =>
     {
         if (corsSettings.AllowedOrigins.Length == 0)
         {
-            // Argha - 2026-02-20 - Wildcard CORS when no origins configured (Phase 4.2)
+            // Argha - 2026-02-20 - Wildcard CORS when no origins configured 
             policy.AllowAnyOrigin()
                   .AllowAnyMethod()
                   .AllowAnyHeader();
         }
         else
         {
-            // Argha - 2026-02-20 - Restrict to configured origins for production (Phase 4.2)
+            // Argha - 2026-02-20 - Restrict to configured origins for production 
             policy.WithOrigins(corsSettings.AllowedOrigins)
                   .AllowAnyMethod()
                   .AllowAnyHeader();
@@ -80,7 +80,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Argha - 2026-02-20 - Fixed-window rate limiter keyed by client IP; disabled by default (Phase 4.2)
+// Argha - 2026-02-20 - Fixed-window rate limiter keyed by client IP; disabled by default 
 var rateLimitSettings = builder.Configuration.GetSection("RateLimit").Get<RateLimitSettings>() ?? new RateLimitSettings();
 if (rateLimitSettings.Enabled)
 {
@@ -88,7 +88,7 @@ if (rateLimitSettings.Enabled)
     {
         options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
         {
-            // Argha - 2026-02-20 - Health check is always exempt from rate limiting (Phase 4.2)
+            // Argha - 2026-02-20 - Health check is always exempt from rate limiting 
             if (context.Request.Path.StartsWithSegments("/api/system/health", StringComparison.OrdinalIgnoreCase))
                 return RateLimitPartition.GetNoLimiter("health");
 
@@ -105,7 +105,7 @@ if (rateLimitSettings.Enabled)
 
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-        // Argha - 2026-02-20 - Return structured JSON on rate limit rejection (Phase 4.2)
+        // Argha - 2026-02-20 - Return structured JSON on rate limit rejection 
         options.OnRejected = async (ctx, cancellationToken) =>
         {
             ctx.HttpContext.Response.ContentType = "application/json";
@@ -123,7 +123,7 @@ if (rateLimitSettings.Enabled)
     });
 }
 
-// Argha - 2026-02-20 - Register FluentValidation validators for complex request rules (Phase 4.2)
+// Argha - 2026-02-20 - Register FluentValidation validators for complex request rules 
 builder.Services.AddScoped<IValidator<ChatRequest>, ChatRequestValidator>();
 builder.Services.AddScoped<IValidator<SearchRequest>, SearchRequestValidator>();
 
@@ -138,11 +138,11 @@ using (var scope = app.Services.CreateScope())
     var vectorStore = scope.ServiceProvider.GetRequiredService<IVectorStore>();
     await vectorStore.InitializeAsync();
 
-    // Argha - 2026-02-15 - Create SQLite database if it doesn't exist (Phase 1.3)
+    // Argha - 2026-02-15 - Create SQLite database if it doesn't exist 
     var dbContext = scope.ServiceProvider.GetRequiredService<RagApiDbContext>();
     await dbContext.Database.EnsureCreatedAsync();
 
-    // Argha - 2026-02-19 - Create ConversationSessions table on existing DBs (Phase 2.2)
+    // Argha - 2026-02-19 - Create ConversationSessions table on existing DBs 
     // EnsureCreatedAsync only creates new DBs; this handles schema evolution without migrations
     await dbContext.Database.ExecuteSqlRawAsync(@"
         CREATE TABLE IF NOT EXISTS ConversationSessions (
@@ -154,7 +154,7 @@ using (var scope = app.Services.CreateScope())
         )
     ");
 
-    // Argha - 2026-02-19 - Add TagsJson column to existing Documents tables (Phase 2.3)
+    // Argha - 2026-02-19 - Add TagsJson column to existing Documents tables 
     // SQLite does not support DROP COLUMN; catch and ignore if column already exists
     try
     {
@@ -170,7 +170,7 @@ app.UseMiddleware<GlobalExceptionMiddleware>();
 // Argha - 2026-02-15 - Log method, path, status code, and elapsed time for every request
 app.UseMiddleware<RequestLoggingMiddleware>();
 
-// Argha - 2026-02-20 - Reject requests missing or with invalid X-Api-Key header (Phase 4.1)
+// Argha - 2026-02-20 - Reject requests missing or with invalid X-Api-Key header 
 app.UseMiddleware<ApiKeyMiddleware>();
 
 // Configure the HTTP request pipeline
@@ -187,13 +187,13 @@ if (app.Environment.IsDevelopment())
 app.UseCors();
 app.UseAuthorization();
 
-// Argha - 2026-02-20 - Apply rate limiting after auth; only active when Enabled=true in config (Phase 4.2)
+// Argha - 2026-02-20 - Apply rate limiting after auth; only active when Enabled=true in config 
 if (rateLimitSettings.Enabled)
     app.UseRateLimiter();
 
 app.MapControllers();
 
-// Argha - 2026-02-15 - Real health check endpoint with dependency status (Phase 1.4)
+// Argha - 2026-02-15 - Real health check endpoint with dependency status 
 app.MapHealthChecks("/api/system/health", new HealthCheckOptions
 {
     ResponseWriter = async (context, report) =>

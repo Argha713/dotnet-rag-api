@@ -5,7 +5,7 @@ using RagApi.Domain.Entities;
 
 namespace RagApi.Application.Services;
 
-// Argha - 2026-02-19 - Conversation session orchestration service (Phase 2.2)
+// Argha - 2026-02-19 - Conversation session orchestration service 
 
 /// <summary>
 /// Manages server-side conversation sessions and history retrieval for RagService

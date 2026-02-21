@@ -33,7 +33,7 @@ public class RagServiceTests
 
         _chatServiceMock.Setup(c => c.ModelName).Returns("llama3.2");
 
-        // Argha - 2026-02-20 - Pass default SearchOptions (UseHybridSearch=false) so existing tests hit semantic-only path (Phase 3.1)
+        // Argha - 2026-02-20 - Pass default SearchOptions (UseHybridSearch=false) so existing tests hit semantic-only path 
         _sut = new RagService(
             _vectorStoreMock.Object,
             _embeddingServiceMock.Object,
@@ -187,7 +187,7 @@ public class RagServiceTests
         _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, docId, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    // Argha - 2026-02-19 - Streaming tests for ChatStreamAsync (Phase 2.1)
+    // Argha - 2026-02-19 - Streaming tests for ChatStreamAsync 
 
     [Fact]
     public async Task ChatStreamAsync_ValidQuery_YieldsSourcesEventThenTokens()
@@ -256,7 +256,7 @@ public class RagServiceTests
         _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, docId, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    // Argha - 2026-02-19 - Tag filtering tests (Phase 2.3)
+    // Argha - 2026-02-19 - Tag filtering tests 
 
     [Fact]
     public async Task ChatAsync_FiltersByTags_PassesTagsToVectorStore()

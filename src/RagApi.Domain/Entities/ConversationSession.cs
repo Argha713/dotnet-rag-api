@@ -1,6 +1,6 @@
 namespace RagApi.Domain.Entities;
 
-// Argha - 2026-02-19 - Server-side conversation session entity (Phase 2.2)
+// Argha - 2026-02-19 - Server-side conversation session entity 
 
 /// <summary>
 /// Represents a server-side conversation session persisted in SQLite

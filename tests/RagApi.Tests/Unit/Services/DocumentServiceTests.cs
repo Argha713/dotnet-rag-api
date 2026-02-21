@@ -30,7 +30,7 @@ public class DocumentServiceTests
         _processorMock.Setup(p => p.IsSupported("text/plain")).Returns(true);
         _processorMock.Setup(p => p.SupportedContentTypes).Returns(new[] { "text/plain", "application/pdf" });
 
-        // Argha - 2026-02-20 - Pass default DocumentProcessingOptions (Phase 3.3)
+        // Argha - 2026-02-20 - Pass default DocumentProcessingOptions 
         _sut = new DocumentService(
             _processorMock.Object,
             _embeddingMock.Object,
@@ -210,7 +210,7 @@ public class DocumentServiceTests
         _repositoryMock.Verify(r => r.DeleteAsync(docId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    // Argha - 2026-02-19 - Tag-related tests (Phase 2.3)
+    // Argha - 2026-02-19 - Tag-related tests 
 
     [Fact]
     public async Task UploadAsync_WithTags_StoresTagsInDocument()

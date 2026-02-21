@@ -27,8 +27,8 @@ public class DocumentsController : ControllerBase
     /// <param name="file">The document file (PDF, DOCX, TXT)</param>
     /// <param name="tags">Optional tags for metadata filtering (send multiple times for multiple tags)</param>
     /// <returns>The uploaded document information</returns>
-    // Argha - 2026-02-19 - Added optional tags form field for metadata filtering (Phase 2.3)
-    // Argha - 2026-02-20 - Added optional chunkingStrategy form field for per-upload strategy selection (Phase 3.3)
+    // Argha - 2026-02-19 - Added optional tags form field for metadata filtering 
+    // Argha - 2026-02-20 - Added optional chunkingStrategy form field for per-upload strategy selection 
     [HttpPost]
     [RequestSizeLimit(50_000_000)] // 50MB limit
     [ProducesResponseType(typeof(DocumentDto), StatusCodes.Status201Created)]
@@ -45,7 +45,7 @@ public class DocumentsController : ControllerBase
             return BadRequest(new { error = "No file provided" });
         }
 
-        // Argha - 2026-02-20 - Validate chunkingStrategy string; 400 if unrecognized (Phase 3.3)
+        // Argha - 2026-02-20 - Validate chunkingStrategy string; 400 if unrecognized 
         ChunkingStrategy? parsedStrategy = null;
         if (!string.IsNullOrWhiteSpace(chunkingStrategy))
         {
@@ -75,7 +75,7 @@ public class DocumentsController : ControllerBase
     /// <summary>
     /// Get all uploaded documents, optionally filtered by a tag
     /// </summary>
-    // Argha - 2026-02-19 - Added optional tag query parameter for listing (Phase 2.3)
+    // Argha - 2026-02-19 - Added optional tag query parameter for listing 
     [HttpGet]
     [ProducesResponseType(typeof(List<DocumentDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllDocuments([FromQuery] string? tag = null, CancellationToken cancellationToken = default)
@@ -141,7 +141,7 @@ public class DocumentsController : ControllerBase
             Status = document.Status.ToString(),
             ChunkCount = document.ChunkCount,
             ErrorMessage = document.ErrorMessage,
-            // Argha - 2026-02-19 - Deserialize TagsJson for API response (Phase 2.3)
+            // Argha - 2026-02-19 - Deserialize TagsJson for API response 
             Tags = JsonSerializer.Deserialize<List<string>>(document.TagsJson) ?? new List<string>()
         };
     }

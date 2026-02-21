@@ -20,12 +20,12 @@ public class ChatController : ControllerBase
     private readonly RagService _ragService;
     private readonly ConversationService _conversationService;
 
-    // Argha - 2026-02-20 - FV validators for complex rules not covered by data annotations (Phase 4.2)
+    // Argha - 2026-02-20 - FV validators for complex rules not covered by data annotations 
     private readonly IValidator<ChatRequest> _chatValidator;
     private readonly IValidator<SearchRequest> _searchValidator;
 
-    // Argha - 2026-02-19 - Injected ConversationService for server-side session support (Phase 2.2)
-    // Argha - 2026-02-20 - Added FV validators for ChatRequest and SearchRequest (Phase 4.2)
+    // Argha - 2026-02-19 - Injected ConversationService for server-side session support 
+    // Argha - 2026-02-20 - Added FV validators for ChatRequest and SearchRequest 
     public ChatController(
         RagService ragService,
         ConversationService conversationService,
@@ -53,7 +53,7 @@ public class ChatController : ControllerBase
             return BadRequest(ModelState);
         }
 
-        // Argha - 2026-02-20 - Run FluentValidation for complex rules (Tags list, ConversationMessage.Role) (Phase 4.2)
+        // Argha - 2026-02-20 - Run FluentValidation for complex rules (Tags list, ConversationMessage.Role) 
         var fvResult = await _chatValidator.ValidateAsync(request, cancellationToken);
         if (!fvResult.IsValid)
         {
@@ -62,7 +62,7 @@ public class ChatController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        // Argha - 2026-02-19 - SessionId takes precedence over ConversationHistory (Phase 2.2)
+        // Argha - 2026-02-19 - SessionId takes precedence over ConversationHistory 
         List<ChatMessage>? history;
         if (request.SessionId.HasValue)
         {
@@ -82,15 +82,15 @@ public class ChatController : ControllerBase
             history,
             request.TopK,
             request.DocumentId,
-            // Argha - 2026-02-19 - Pass tags filter for metadata-based retrieval (Phase 2.3)
+            // Argha - 2026-02-19 - Pass tags filter for metadata-based retrieval 
             request.Tags,
-            // Argha - 2026-02-20 - Pass per-request hybrid search override (Phase 3.1)
+            // Argha - 2026-02-20 - Pass per-request hybrid search override 
             request.UseHybridSearch,
-            // Argha - 2026-02-20 - Pass per-request MMR re-ranking override (Phase 3.2)
+            // Argha - 2026-02-20 - Pass per-request MMR re-ranking override 
             request.UseReRanking,
             cancellationToken);
 
-        // Argha - 2026-02-19 - Persist turn to session if SessionId was provided (Phase 2.2)
+        // Argha - 2026-02-19 - Persist turn to session if SessionId was provided 
         if (request.SessionId.HasValue)
         {
             await _conversationService.AppendMessagesAsync(
@@ -132,7 +132,7 @@ public class ChatController : ControllerBase
             return;
         }
 
-        // Argha - 2026-02-20 - Run FluentValidation before SSE headers are set so a 400 can still be returned (Phase 4.2)
+        // Argha - 2026-02-20 - Run FluentValidation before SSE headers are set so a 400 can still be returned 
         var fvResult = await _chatValidator.ValidateAsync(request, cancellationToken);
         if (!fvResult.IsValid)
         {
@@ -140,7 +140,7 @@ public class ChatController : ControllerBase
             return;
         }
 
-        // Argha - 2026-02-19 - Resolve session history before setting SSE headers so we can still return 404 (Phase 2.2)
+        // Argha - 2026-02-19 - Resolve session history before setting SSE headers so we can still return 404 
         List<ChatMessage>? history;
         if (request.SessionId.HasValue)
         {
@@ -170,15 +170,15 @@ public class ChatController : ControllerBase
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
 
-        // Argha - 2026-02-19 - Accumulate tokens to persist full answer to session after streaming (Phase 2.2)
+        // Argha - 2026-02-19 - Accumulate tokens to persist full answer to session after streaming 
         var answerBuilder = request.SessionId.HasValue ? new StringBuilder() : null;
 
         try
         {
             await foreach (var streamEvent in _ragService.ChatStreamAsync(
-                // Argha - 2026-02-19 - Pass tags filter through to streaming pipeline (Phase 2.3)
-                // Argha - 2026-02-20 - Pass per-request hybrid search override (Phase 3.1)
-                // Argha - 2026-02-20 - Pass per-request MMR re-ranking override (Phase 3.2)
+                // Argha - 2026-02-19 - Pass tags filter through to streaming pipeline 
+                // Argha - 2026-02-20 - Pass per-request hybrid search override 
+                // Argha - 2026-02-20 - Pass per-request MMR re-ranking override 
                 request.Query, history, request.TopK, request.DocumentId, request.Tags, request.UseHybridSearch, request.UseReRanking, cancellationToken))
             {
                 if (streamEvent.Type == "token")
@@ -192,7 +192,7 @@ public class ChatController : ControllerBase
             await Response.WriteAsync("data: {\"type\":\"done\"}\n\n", cancellationToken);
             await Response.Body.FlushAsync(cancellationToken);
 
-            // Argha - 2026-02-19 - Persist user query + assembled answer to session (Phase 2.2)
+            // Argha - 2026-02-19 - Persist user query + assembled answer to session 
             if (request.SessionId.HasValue && answerBuilder != null)
             {
                 await _conversationService.AppendMessagesAsync(
@@ -220,7 +220,7 @@ public class ChatController : ControllerBase
             return BadRequest(ModelState);
         }
 
-        // Argha - 2026-02-20 - Run FluentValidation for Tags list constraints (Phase 4.2)
+        // Argha - 2026-02-20 - Run FluentValidation for Tags list constraints 
         var fvResult = await _searchValidator.ValidateAsync(request, cancellationToken);
         if (!fvResult.IsValid)
         {
@@ -233,11 +233,11 @@ public class ChatController : ControllerBase
             request.Query,
             request.TopK,
             request.DocumentId,
-            // Argha - 2026-02-19 - Pass tags filter for tag-scoped semantic search (Phase 2.3)
+            // Argha - 2026-02-19 - Pass tags filter for tag-scoped semantic search 
             request.Tags,
-            // Argha - 2026-02-20 - Pass per-request hybrid search override (Phase 3.1)
+            // Argha - 2026-02-20 - Pass per-request hybrid search override 
             request.UseHybridSearch,
-            // Argha - 2026-02-20 - Pass per-request MMR re-ranking override (Phase 3.2)
+            // Argha - 2026-02-20 - Pass per-request MMR re-ranking override 
             request.UseReRanking,
             cancellationToken);
 

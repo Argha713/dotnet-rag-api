@@ -17,7 +17,7 @@ using RagApi.Domain.Entities;
 namespace RagApi.Tests.Unit.Api;
 
 // Argha - 2026-02-15 - Unit tests for ChatController endpoints (Phase 1.5)
-// Argha - 2026-02-19 - Extended with session-based chat tests (Phase 2.2)
+// Argha - 2026-02-19 - Extended with session-based chat tests 
 public class ChatControllerTests
 {
     private readonly Mock<IVectorStore> _vectorStoreMock;
@@ -40,7 +40,7 @@ public class ChatControllerTests
         _chatMock.Setup(c => c.ModelName).Returns("llama3.2");
 
         // Argha - 2026-02-15 - Use real RagService with mocked dependencies since it's a concrete class
-        // Argha - 2026-02-20 - Pass default SearchOptions (UseHybridSearch=false) (Phase 3.1)
+        // Argha - 2026-02-20 - Pass default SearchOptions (UseHybridSearch=false) 
         var ragService = new RagService(
             _vectorStoreMock.Object,
             _embeddingMock.Object,
@@ -48,12 +48,12 @@ public class ChatControllerTests
             Mock.Of<ILogger<RagService>>(),
             Options.Create(new SearchOptions()));
 
-        // Argha - 2026-02-19 - Real ConversationService with mocked repository (Phase 2.2)
+        // Argha - 2026-02-19 - Real ConversationService with mocked repository 
         var conversationService = new ConversationService(
             _conversationRepoMock.Object,
             Mock.Of<ILogger<ConversationService>>());
 
-        // Argha - 2026-02-20 - Pass always-valid FV mocks so existing tests are unaffected (Phase 4.2)
+        // Argha - 2026-02-20 - Pass always-valid FV mocks so existing tests are unaffected 
         var chatValidatorMock = new Mock<IValidator<ChatRequest>>();
         chatValidatorMock
             .Setup(v => v.ValidateAsync(It.IsAny<ChatRequest>(), It.IsAny<CancellationToken>()))
@@ -156,7 +156,7 @@ public class ChatControllerTests
         _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, docId, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    // Argha - 2026-02-19 - Session-based chat tests (Phase 2.2)
+    // Argha - 2026-02-19 - Session-based chat tests 
 
     [Fact]
     public async Task Chat_WithSessionId_LoadsHistoryFromSession()
@@ -241,7 +241,7 @@ public class ChatControllerTests
         result.Should().BeOfType<NotFoundObjectResult>();
     }
 
-    // Argha - 2026-02-19 - Streaming endpoint tests (Phase 2.1)
+    // Argha - 2026-02-19 - Streaming endpoint tests 
 
     [Fact]
     public async Task StreamChat_ValidRequest_WritesSseEvents()
@@ -304,7 +304,7 @@ public class ChatControllerTests
         }
     }
 
-    // Argha - 2026-02-19 - Tag filtering test (Phase 2.3)
+    // Argha - 2026-02-19 - Tag filtering test 
     [Fact]
     public async Task Search_FiltersByTags_PassesTagsToVectorStore()
     {

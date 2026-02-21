@@ -4,7 +4,7 @@ using RagApi.Domain.Entities;
 
 namespace RagApi.Infrastructure.Data;
 
-// Argha - 2026-02-19 - SQLite-backed conversation session repository (Phase 2.2)
+// Argha - 2026-02-19 - SQLite-backed conversation session repository 
 public class ConversationRepository : IConversationRepository
 {
     private readonly RagApiDbContext _dbContext;

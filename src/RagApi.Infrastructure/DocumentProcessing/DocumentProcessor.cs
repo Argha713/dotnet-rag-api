@@ -58,7 +58,7 @@ public class DocumentProcessor : IDocumentProcessor
         if (string.IsNullOrWhiteSpace(text))
             return new List<DocumentChunk>();
 
-        // Argha - 2026-02-20 - Dispatch to the appropriate strategy (Phase 3.3)
+        // Argha - 2026-02-20 - Dispatch to the appropriate strategy 
         var chunks = options.Strategy switch
         {
             ChunkingStrategy.Sentence => ChunkBySentence(documentId, text, options),
@@ -72,7 +72,7 @@ public class DocumentProcessor : IDocumentProcessor
         return chunks;
     }
 
-    // Argha - 2026-02-20 - Existing paragraph-aware fixed-size chunking, now extracted to a private method (Phase 3.3)
+    // Argha - 2026-02-20 - Existing paragraph-aware fixed-size chunking, now extracted to a private method 
     private static List<DocumentChunk> ChunkByFixed(Guid documentId, string text, ChunkingOptions options)
     {
         var chunks = new List<DocumentChunk>();
@@ -122,7 +122,7 @@ public class DocumentProcessor : IDocumentProcessor
         return chunks;
     }
 
-    // Argha - 2026-02-20 - Sentence-based chunking: splits at .!? boundaries, groups into size-limited chunks (Phase 3.3)
+    // Argha - 2026-02-20 - Sentence-based chunking: splits at .!? boundaries, groups into size-limited chunks 
     private static List<DocumentChunk> ChunkBySentence(Guid documentId, string text, ChunkingOptions options)
     {
         var chunks = new List<DocumentChunk>();
@@ -140,11 +140,11 @@ public class DocumentProcessor : IDocumentProcessor
         var chunkIndex = 0;
         var position = 0;
         var chunkStartPosition = 0;
-        var lastSentence = string.Empty; // Argha - 2026-02-20 - One-sentence overlap (Phase 3.3)
+        var lastSentence = string.Empty; // Argha - 2026-02-20 - One-sentence overlap 
 
         foreach (var sentence in sentences)
         {
-            // Argha - 2026-02-20 - When adding this sentence would overflow, flush current chunk (Phase 3.3)
+            // Argha - 2026-02-20 - When adding this sentence would overflow, flush current chunk 
             if (currentChunk.Length > 0 &&
                 currentChunk.Length + sentence.Length + 1 > options.ChunkSize)
             {
@@ -186,7 +186,7 @@ public class DocumentProcessor : IDocumentProcessor
         return chunks;
     }
 
-    // Argha - 2026-02-20 - Paragraph-based chunking: each blank-line-separated block is one chunk (Phase 3.3)
+    // Argha - 2026-02-20 - Paragraph-based chunking: each blank-line-separated block is one chunk 
     private static List<DocumentChunk> ChunkByParagraph(Guid documentId, string text)
     {
         var paragraphs = Regex.Split(text, @"\n\n|\r\n\r\n")

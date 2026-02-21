@@ -44,6 +44,6 @@ public class ChunkingOptions
     public int ChunkSize { get; set; } = 1000;
     public int ChunkOverlap { get; set; } = 200;
     public string SeparatorPattern { get; set; } = @"\n\n|\r\n\r\n";
-    // Argha - 2026-02-20 - Strategy selection; defaults to Fixed (existing behaviour) (Phase 3.3)
+    // Argha - 2026-02-20 - Strategy selection; defaults to Fixed (existing behaviour) 
     public ChunkingStrategy Strategy { get; set; } = ChunkingStrategy.Fixed;
 }

@@ -14,7 +14,7 @@ public class Document
     public int ChunkCount { get; set; }
     public string? ErrorMessage { get; set; }
 
-    // Argha - 2026-02-19 - JSON array of tags for metadata filtering (Phase 2.3)
+    // Argha - 2026-02-19 - JSON array of tags for metadata filtering 
     public string TagsJson { get; set; } = "[]";
 }
 

@@ -2,7 +2,7 @@ using RagApi.Domain.Entities;
 
 namespace RagApi.Application.Models;
 
-// Argha - 2026-02-19 - Streaming event model for SSE chat responses (Phase 2.1)
+// Argha - 2026-02-19 - Streaming event model for SSE chat responses 
 
 /// <summary>
 /// Represents a single event in a streaming chat response

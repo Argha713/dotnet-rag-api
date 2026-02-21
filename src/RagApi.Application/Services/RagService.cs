@@ -16,7 +16,7 @@ public class RagService
     private readonly IEmbeddingService _embeddingService;
     private readonly IChatService _chatService;
     private readonly ILogger<RagService> _logger;
-    // Argha - 2026-02-20 - SearchOptions for hybrid search config (Phase 3.1)
+    // Argha - 2026-02-20 - SearchOptions for hybrid search config 
     private readonly SearchOptions _searchOptions;
 
     private const string SystemPromptTemplate = @"You are a helpful AI assistant that answers questions based on the provided context.
@@ -33,7 +33,7 @@ Context from documents:
 
 Remember: Only use information from the context above. Do not make up information.";
 
-    // Argha - 2026-02-20 - Added IOptions<SearchOptions> for hybrid search (Phase 3.1)
+    // Argha - 2026-02-20 - Added IOptions<SearchOptions> for hybrid search 
     public RagService(
         IVectorStore vectorStore,
         IEmbeddingService embeddingService,
@@ -51,9 +51,9 @@ Remember: Only use information from the context above. Do not make up informatio
     /// <summary>
     /// Process a chat query using RAG (Retrieval-Augmented Generation)
     /// </summary>
-    // Argha - 2026-02-19 - Added filterByTags parameter for metadata tag filtering (Phase 2.3)
-    // Argha - 2026-02-20 - Added useHybridSearch parameter for hybrid search (Phase 3.1)
-    // Argha - 2026-02-20 - Added useReRanking parameter for MMR re-ranking (Phase 3.2)
+    // Argha - 2026-02-19 - Added filterByTags parameter for metadata tag filtering 
+    // Argha - 2026-02-20 - Added useHybridSearch parameter for hybrid search 
+    // Argha - 2026-02-20 - Added useReRanking parameter for MMR re-ranking 
     public async Task<ChatResponse> ChatAsync(
         string query,
         List<ChatMessage>? conversationHistory = null,
@@ -70,8 +70,8 @@ Remember: Only use information from the context above. Do not make up informatio
         var queryEmbedding = await _embeddingService.GenerateEmbeddingAsync(query, cancellationToken);
         _logger.LogDebug("Generated query embedding with {Dimensions} dimensions", queryEmbedding.Length);
 
-        // Argha - 2026-02-20 - Use hybrid search if enabled by request or config (Phase 3.1)
-        // Argha - 2026-02-20 - Use MMR re-ranking if enabled by request or config (Phase 3.2)
+        // Argha - 2026-02-20 - Use hybrid search if enabled by request or config 
+        // Argha - 2026-02-20 - Use MMR re-ranking if enabled by request or config 
         var searchResults = await RetrieveChunksAsync(
             query, queryEmbedding, topK, filterByDocumentId, filterByTags,
             useHybridSearch ?? _searchOptions.UseHybridSearch,
@@ -122,10 +122,10 @@ Remember: Only use information from the context above. Do not make up informatio
     /// <summary>
     /// Process a chat query using RAG and stream the response as a sequence of events
     /// </summary>
-    // Argha - 2026-02-19 - Streaming variant of ChatAsync for SSE endpoint (Phase 2.1)
-    // Argha - 2026-02-19 - Added filterByTags parameter for metadata tag filtering (Phase 2.3)
-    // Argha - 2026-02-20 - Added useHybridSearch parameter for hybrid search (Phase 3.1)
-    // Argha - 2026-02-20 - Added useReRanking parameter for MMR re-ranking (Phase 3.2)
+    // Argha - 2026-02-19 - Streaming variant of ChatAsync for SSE endpoint 
+    // Argha - 2026-02-19 - Added filterByTags parameter for metadata tag filtering 
+    // Argha - 2026-02-20 - Added useHybridSearch parameter for hybrid search 
+    // Argha - 2026-02-20 - Added useReRanking parameter for MMR re-ranking 
     public async IAsyncEnumerable<StreamEvent> ChatStreamAsync(
         string query,
         List<ChatMessage>? conversationHistory = null,
@@ -141,8 +141,8 @@ Remember: Only use information from the context above. Do not make up informatio
         // Generate embedding for the query
         var queryEmbedding = await _embeddingService.GenerateEmbeddingAsync(query, cancellationToken);
 
-        // Argha - 2026-02-20 - Use hybrid search if enabled by request or config (Phase 3.1)
-        // Argha - 2026-02-20 - Use MMR re-ranking if enabled by request or config (Phase 3.2)
+        // Argha - 2026-02-20 - Use hybrid search if enabled by request or config 
+        // Argha - 2026-02-20 - Use MMR re-ranking if enabled by request or config 
         var searchResults = await RetrieveChunksAsync(
             query, queryEmbedding, topK, filterByDocumentId, filterByTags,
             useHybridSearch ?? _searchOptions.UseHybridSearch,
@@ -192,9 +192,9 @@ Remember: Only use information from the context above. Do not make up informatio
     /// <summary>
     /// Perform semantic search without generating a chat response
     /// </summary>
-    // Argha - 2026-02-19 - Added filterByTags parameter for metadata tag filtering (Phase 2.3)
-    // Argha - 2026-02-20 - Added useHybridSearch parameter for hybrid search (Phase 3.1)
-    // Argha - 2026-02-20 - Added useReRanking parameter for MMR re-ranking (Phase 3.2)
+    // Argha - 2026-02-19 - Added filterByTags parameter for metadata tag filtering 
+    // Argha - 2026-02-20 - Added useHybridSearch parameter for hybrid search 
+    // Argha - 2026-02-20 - Added useReRanking parameter for MMR re-ranking 
     public async Task<List<SearchResult>> SearchAsync(
         string query,
         int topK = 5,
@@ -233,7 +233,7 @@ Remember: Only use information from the context above. Do not make up informatio
 
         if (!useHybrid)
         {
-            // Argha - 2026-02-20 - Use SearchWithEmbeddingsAsync when re-ranking is requested (Phase 3.2)
+            // Argha - 2026-02-20 - Use SearchWithEmbeddingsAsync when re-ranking is requested 
             candidates = useReRanking
                 ? await _vectorStore.SearchWithEmbeddingsAsync(
                     queryEmbedding, candidateCount, filterByDocumentId, filterByTags, cancellationToken)
@@ -242,7 +242,7 @@ Remember: Only use information from the context above. Do not make up informatio
         }
         else
         {
-            // Argha - 2026-02-20 - Hybrid: run semantic + keyword in parallel with expanded candidates (Phase 3.1)
+            // Argha - 2026-02-20 - Hybrid: run semantic + keyword in parallel with expanded candidates 
             var semanticTask = useReRanking
                 ? _vectorStore.SearchWithEmbeddingsAsync(
                     queryEmbedding, candidateCount, filterByDocumentId, filterByTags, cancellationToken)
@@ -261,7 +261,7 @@ Remember: Only use information from the context above. Do not make up informatio
             candidates = FuseWithRrf(semanticTask.Result, keywordTask.Result, candidateCount);
         }
 
-        // Argha - 2026-02-20 - Apply MMR re-ranking if enabled (Phase 3.2)
+        // Argha - 2026-02-20 - Apply MMR re-ranking if enabled 
         if (useReRanking && candidates.Count > 0)
         {
             _logger.LogDebug("Applying MMR re-ranking with lambda={Lambda}", _searchOptions.MmrLambda);
@@ -271,7 +271,7 @@ Remember: Only use information from the context above. Do not make up informatio
         return candidates;
     }
 
-    // Argha - 2026-02-20 - Reciprocal Rank Fusion: score = Σ 1/(60 + rank) across both lists (Phase 3.1)
+    // Argha - 2026-02-20 - Reciprocal Rank Fusion: score = Σ 1/(60 + rank) across both lists 
     private static List<SearchResult> FuseWithRrf(
         List<SearchResult> semanticResults,
         List<SearchResult> keywordResults,
@@ -301,7 +301,7 @@ Remember: Only use information from the context above. Do not make up informatio
             .Take(topK)
             .Select(x =>
             {
-                // Argha - 2026-02-20 - Replace placeholder score with the fused RRF score (Phase 3.1)
+                // Argha - 2026-02-20 - Replace placeholder score with the fused RRF score 
                 x.Result.Score = x.Score;
                 return x.Result;
             })

@@ -33,7 +33,7 @@ public class DocumentsControllerTests
         _processorMock.Setup(p => p.SupportedContentTypes).Returns(new[] { "text/plain", "application/pdf" });
 
         // Argha - 2026-02-15 - Use real DocumentService with mocked dependencies since it's a concrete class
-        // Argha - 2026-02-20 - Pass default DocumentProcessingOptions (Phase 3.3)
+        // Argha - 2026-02-20 - Pass default DocumentProcessingOptions 
         var documentService = new DocumentService(
             _processorMock.Object,
             _embeddingMock.Object,
@@ -179,7 +179,7 @@ public class DocumentsControllerTests
         result.Should().BeOfType<NotFoundObjectResult>();
     }
 
-    // Argha - 2026-02-19 - Tag-related controller tests (Phase 2.3)
+    // Argha - 2026-02-19 - Tag-related controller tests 
 
     [Fact]
     public async Task Upload_WithTags_IncludesTagsInDto()

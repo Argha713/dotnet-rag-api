@@ -3,7 +3,7 @@ namespace RagApi.Application.Models;
 /// <summary>
 /// Configuration options for document processing and chunking
 /// </summary>
-// Argha - 2026-02-20 - Config POCO for configurable chunking strategies (Phase 3.3)
+// Argha - 2026-02-20 - Config POCO for configurable chunking strategies 
 public class DocumentProcessingOptions
 {
     public const string SectionName = "DocumentProcessing";

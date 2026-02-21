@@ -4,7 +4,7 @@ using RagApi.Application.Models;
 using RagApi.Domain.Entities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-// Argha - 2026-02-15 - Commented out: replaced in-memory storage with IDocumentRepository (Phase 1.3)
+// Argha - 2026-02-15 - Commented out: replaced in-memory storage with IDocumentRepository 
 // using System.Collections.Concurrent;
 
 namespace RagApi.Application.Services;
@@ -19,13 +19,13 @@ public class DocumentService
     private readonly IVectorStore _vectorStore;
     private readonly ILogger<DocumentService> _logger;
     private readonly IDocumentRepository _documentRepository;
-    // Argha - 2026-02-20 - Default chunking options from config (Phase 3.3)
+    // Argha - 2026-02-20 - Default chunking options from config 
     private readonly DocumentProcessingOptions _processingOptions;
 
-    // Argha - 2026-02-15 - Commented out: replaced with SQLite via IDocumentRepository (Phase 1.3)
+    // Argha - 2026-02-15 - Commented out: replaced with SQLite via IDocumentRepository 
     // private static readonly ConcurrentDictionary<Guid, Document> _documents = new();
 
-    // Argha - 2026-02-20 - Added IOptions<DocumentProcessingOptions> for configurable chunking (Phase 3.3)
+    // Argha - 2026-02-20 - Added IOptions<DocumentProcessingOptions> for configurable chunking 
     public DocumentService(
         IDocumentProcessor documentProcessor,
         IEmbeddingService embeddingService,
@@ -45,8 +45,8 @@ public class DocumentService
     /// <summary>
     /// Upload and process a document
     /// </summary>
-    // Argha - 2026-02-19 - Added optional tags parameter for metadata filtering (Phase 2.3)
-    // Argha - 2026-02-20 - Added optional chunkingStrategy parameter for configurable chunking (Phase 3.3)
+    // Argha - 2026-02-19 - Added optional tags parameter for metadata filtering 
+    // Argha - 2026-02-20 - Added optional chunkingStrategy parameter for configurable chunking 
     public async Task<Document> UploadDocumentAsync(
         Stream fileStream,
         string fileName,
@@ -73,10 +73,10 @@ public class DocumentService
             ContentType = contentType,
             FileSize = fileStream.Length,
             Status = DocumentStatus.Processing,
-            // Argha - 2026-02-19 - Persist tags as JSON (Phase 2.3)
+            // Argha - 2026-02-19 - Persist tags as JSON 
             TagsJson = JsonSerializer.Serialize(normalizedTags)
         };
-        // Argha - 2026-02-15 - Commented out: was in-memory storage (Phase 1.3)
+        // Argha - 2026-02-15 - Commented out: was in-memory storage 
         // _documents[document.Id] = document;
         await _documentRepository.AddAsync(document, cancellationToken);
 
@@ -94,7 +94,7 @@ public class DocumentService
             _logger.LogDebug("Extracted {Length} characters from document", text.Length);
 
             // Step 2: Chunk the text
-            // Argha - 2026-02-20 - Build ChunkingOptions from config defaults, override strategy if supplied (Phase 3.3)
+            // Argha - 2026-02-20 - Build ChunkingOptions from config defaults, override strategy if supplied 
             var effectiveStrategy = chunkingStrategy
                 ?? (Enum.TryParse<ChunkingStrategy>(_processingOptions.DefaultChunkingStrategy, ignoreCase: true, out var parsed)
                     ? parsed
@@ -120,7 +120,7 @@ public class DocumentService
                 chunks[i].Embedding = embeddings[i];
                 chunks[i].Metadata["fileName"] = fileName;
                 chunks[i].Metadata["contentType"] = contentType;
-                // Argha - 2026-02-19 - Propagate tags to each chunk for Qdrant payload (Phase 2.3)
+                // Argha - 2026-02-19 - Propagate tags to each chunk for Qdrant payload 
                 chunks[i].Tags = normalizedTags;
             }
 
@@ -153,7 +153,7 @@ public class DocumentService
     /// </summary>
     public async Task<Document?> GetDocumentAsync(Guid documentId, CancellationToken cancellationToken = default)
     {
-        // Argha - 2026-02-15 - Commented out: was in-memory lookup (Phase 1.3)
+        // Argha - 2026-02-15 - Commented out: was in-memory lookup 
         // _documents.TryGetValue(documentId, out var document);
         // return Task.FromResult(document);
         return await _documentRepository.GetByIdAsync(documentId, cancellationToken);
@@ -162,10 +162,10 @@ public class DocumentService
     /// <summary>
     /// Get all documents, optionally filtered by a tag
     /// </summary>
-    // Argha - 2026-02-19 - Added optional tag filter; filtering done in memory (Phase 2.3)
+    // Argha - 2026-02-19 - Added optional tag filter; filtering done in memory 
     public async Task<List<Document>> GetAllDocumentsAsync(string? tag = null, CancellationToken cancellationToken = default)
     {
-        // Argha - 2026-02-15 - Commented out: was in-memory list (Phase 1.3)
+        // Argha - 2026-02-15 - Commented out: was in-memory list 
         // return Task.FromResult(_documents.Values.ToList());
         var all = await _documentRepository.GetAllAsync(cancellationToken);
 
@@ -189,7 +189,7 @@ public class DocumentService
         // Remove chunks from vector store
         await _vectorStore.DeleteDocumentChunksAsync(documentId, cancellationToken);
 
-        // Argha - 2026-02-15 - Commented out: was in-memory removal (Phase 1.3)
+        // Argha - 2026-02-15 - Commented out: was in-memory removal 
         // _documents.TryRemove(documentId, out _);
         await _documentRepository.DeleteAsync(documentId, cancellationToken);
 

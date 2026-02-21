@@ -34,27 +34,27 @@ public class ChatRequest
     /// Optional: Server-side session ID. When provided, history is loaded from the session
     /// and the result is automatically appended. Takes precedence over ConversationHistory.
     /// </summary>
-    // Argha - 2026-02-19 - Server-side session support (Phase 2.2)
+    // Argha - 2026-02-19 - Server-side session support 
     public Guid? SessionId { get; set; }
 
     /// <summary>
     /// Optional: Filter retrieved chunks to documents tagged with ALL specified tags
     /// </summary>
-    // Argha - 2026-02-19 - Tag-based filtering for RAG retrieval (Phase 2.3)
+    // Argha - 2026-02-19 - Tag-based filtering for RAG retrieval 
     public List<string>? Tags { get; set; }
 
     /// <summary>
     /// Optional: Override the global hybrid search setting for this request.
     /// true = always hybrid, false = always semantic-only, null = use appsettings default.
     /// </summary>
-    // Argha - 2026-02-20 - Per-request hybrid search override (Phase 3.1)
+    // Argha - 2026-02-20 - Per-request hybrid search override 
     public bool? UseHybridSearch { get; set; }
 
     /// <summary>
     /// Optional: Override the global MMR re-ranking setting for this request.
     /// true = always re-rank, false = skip re-ranking, null = use appsettings default.
     /// </summary>
-    // Argha - 2026-02-20 - Per-request MMR re-ranking override (Phase 3.2)
+    // Argha - 2026-02-20 - Per-request MMR re-ranking override 
     public bool? UseReRanking { get; set; }
 }
 
@@ -125,19 +125,19 @@ public class SearchRequest
     /// <summary>
     /// Optional: Filter results to documents tagged with ALL specified tags
     /// </summary>
-    // Argha - 2026-02-19 - Tag-based filtering for semantic search (Phase 2.3)
+    // Argha - 2026-02-19 - Tag-based filtering for semantic search 
     public List<string>? Tags { get; set; }
 
     /// <summary>
     /// Optional: Override the global hybrid search setting for this request.
     /// </summary>
-    // Argha - 2026-02-20 - Per-request hybrid search override (Phase 3.1)
+    // Argha - 2026-02-20 - Per-request hybrid search override 
     public bool? UseHybridSearch { get; set; }
 
     /// <summary>
     /// Optional: Override the global MMR re-ranking setting for this request.
     /// </summary>
-    // Argha - 2026-02-20 - Per-request MMR re-ranking override (Phase 3.2)
+    // Argha - 2026-02-20 - Per-request MMR re-ranking override 
     public bool? UseReRanking { get; set; }
 }
 
@@ -154,7 +154,7 @@ public class DocumentDto
     public string Status { get; set; } = string.Empty;
     public int ChunkCount { get; set; }
     public string? ErrorMessage { get; set; }
-    // Argha - 2026-02-19 - Tags deserialized from TagsJson for API response (Phase 2.3)
+    // Argha - 2026-02-19 - Tags deserialized from TagsJson for API response 
     public List<string> Tags { get; set; } = new();
 }
 
@@ -171,7 +171,7 @@ public class SearchResultDto
     public int ChunkIndex { get; set; }
 }
 
-// Argha - 2026-02-19 - Conversation session DTOs (Phase 2.2)
+// Argha - 2026-02-19 - Conversation session DTOs 
 
 /// <summary>Response returned when a new session is created</summary>
 public class CreateSessionResponse

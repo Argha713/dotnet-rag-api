@@ -38,7 +38,7 @@ public class SystemController : ControllerBase
         _logger = logger; // Argha - 2026-02-15 - Kept for intentional graceful degradation in GetStats
     }
 
-    // Health check endpoint moved to MapHealthChecks("/api/system/health") in Program.cs (Phase 1.4)
+    // Health check endpoint moved to MapHealthChecks("/api/system/health") in Program.cs 
 
     /// <summary>
     /// Get system statistics

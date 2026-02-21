@@ -12,12 +12,12 @@ public class RagApiDbContext : DbContext
 
     public DbSet<Document> Documents => Set<Document>();
 
-    // Argha - 2026-02-19 - Conversation sessions table (Phase 2.2)
+    // Argha - 2026-02-19 - Conversation sessions table 
     public DbSet<ConversationSession> ConversationSessions => Set<ConversationSession>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Argha - 2026-02-19 - ConversationSession model configuration (Phase 2.2)
+        // Argha - 2026-02-19 - ConversationSession model configuration 
         modelBuilder.Entity<ConversationSession>(entity =>
         {
             entity.HasKey(s => s.Id);
@@ -50,7 +50,7 @@ public class RagApiDbContext : DbContext
             entity.Property(d => d.ErrorMessage)
                 .HasMaxLength(2000);
 
-            // Argha - 2026-02-19 - Tags stored as JSON array string (Phase 2.3)
+            // Argha - 2026-02-19 - Tags stored as JSON array string 
             entity.Property(d => d.TagsJson)
                 .IsRequired()
                 .HasDefaultValue("[]");

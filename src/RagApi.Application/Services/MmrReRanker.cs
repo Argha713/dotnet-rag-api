@@ -39,12 +39,12 @@ public static class MmrReRanker
 
             foreach (var candidate in remaining)
             {
-                // Argha - 2026-02-20 - Use stored score as query similarity proxy when embedding is absent (Phase 3.2)
+                // Argha - 2026-02-20 - Use stored score as query similarity proxy when embedding is absent 
                 var querySim = candidate.Embedding != null
                     ? CosineSimilarity(candidate.Embedding, queryEmbedding)
                     : candidate.Score;
 
-                // Argha - 2026-02-20 - Maximum similarity to any already-selected result (Phase 3.2)
+                // Argha - 2026-02-20 - Maximum similarity to any already-selected result 
                 var maxSelectedSim = selected.Count == 0
                     ? 0.0
                     : selected.Max(s =>
@@ -70,7 +70,7 @@ public static class MmrReRanker
         return selected;
     }
 
-    // Argha - 2026-02-20 - Standard cosine similarity: dot product / (|a| * |b|) (Phase 3.2)
+    // Argha - 2026-02-20 - Standard cosine similarity: dot product / (|a| * |b|) 
     private static double CosineSimilarity(float[] a, float[] b)
     {
         if (a.Length != b.Length)

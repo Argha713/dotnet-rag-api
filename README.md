@@ -29,7 +29,7 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **.NE
 - **Rate limiting** — Configurable fixed-window rate limiter keyed by IP; opt-in via `RateLimit:Enabled`; health check always exempt
 - **Production CORS** — Configurable allowed origins via `appsettings.json`; empty list = allow any (dev default)
 - **FluentValidation** — Rich input validation for Tags list constraints and `ConversationMessage.Role` allowlist
-- **148 unit tests** — xUnit + Moq + FluentAssertions covering all layers
+- **168 unit tests** — xUnit + Moq + FluentAssertions covering all layers
 - **Docker-ready** — One command to spin up all dependencies
 - **Swagger UI** — Interactive API documentation at the root URL
 
@@ -276,6 +276,7 @@ Qdrant__Port=6334
 | **Framework** | .NET 8, ASP.NET Core |
 | **AI (Local)** | Ollama (llama3.2, nomic-embed-text) |
 | **AI (Cloud)** | Azure OpenAI |
+| **Vector DB (Cloud)** | Azure AI Search |
 | **Vector DB** | Qdrant |
 | **PDF Parsing** | PdfPig |
 | **DOCX Parsing** | DocumentFormat.OpenXml |
@@ -341,8 +342,8 @@ dotnet-rag-api/
 - [x] Production CORS configuration
 - [x] Input validation (FluentValidation)
 
-### Phase 5: Advanced Features
-- [ ] Azure AI Search integration
+### Phase 5: Advanced Features ✅ (5.1 done)
+- [x] Azure AI Search integration — 168 tests total
 - [ ] Batch document upload
 - [ ] Document update & re-process
 - [ ] Export conversation history

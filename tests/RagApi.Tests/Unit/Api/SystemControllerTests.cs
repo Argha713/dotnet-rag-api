@@ -36,7 +36,7 @@ public class SystemControllerTests
         var aiConfig = Options.Create(new AiConfiguration { Provider = "Ollama" });
 
         // Argha - 2026-02-15 - Use real DocumentService with mocked dependencies since it's a concrete class
-        // Argha - 2026-02-20 - Pass default DocumentProcessingOptions (Phase 3.3)
+        // Argha - 2026-02-20 - Pass default DocumentProcessingOptions 
         var documentService = new DocumentService(
             Mock.Of<IDocumentProcessor>(),
             _embeddingMock.Object,

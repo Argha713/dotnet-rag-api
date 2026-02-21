@@ -14,6 +14,6 @@ public class DocumentChunk
     public float[]? Embedding { get; set; }
     public Dictionary<string, string> Metadata { get; set; } = new();
 
-    // Argha - 2026-02-19 - Tags propagated from parent document for Qdrant payload filtering (Phase 2.3)
+    // Argha - 2026-02-19 - Tags propagated from parent document for Qdrant payload filtering 
     public List<string> Tags { get; set; } = new();
 }

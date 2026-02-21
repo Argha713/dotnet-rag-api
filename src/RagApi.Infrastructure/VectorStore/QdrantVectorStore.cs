@@ -59,7 +59,7 @@ public class QdrantVectorStore : IVectorStore
                 _logger.LogDebug("Collection {CollectionName} already exists", _config.CollectionName);
             }
 
-            // Argha - 2026-02-20 - Create full-text payload index on 'content' for keyword search (Phase 3.1)
+            // Argha - 2026-02-20 - Create full-text payload index on 'content' for keyword search 
             // CreatePayloadIndexAsync is idempotent — safe to call on every startup
             await _client.CreatePayloadIndexAsync(
                 collectionName: _config.CollectionName,
@@ -81,7 +81,7 @@ public class QdrantVectorStore : IVectorStore
 
         var points = chunks.Select(chunk =>
         {
-            // Argha - 2026-02-19 - Build tags ListValue for Qdrant payload (Phase 2.3)
+            // Argha - 2026-02-19 - Build tags ListValue for Qdrant payload 
             var tagsValue = new Value { ListValue = new ListValue() };
             foreach (var tag in chunk.Tags)
                 tagsValue.ListValue.Values.Add(new Value { StringValue = tag });
@@ -99,7 +99,7 @@ public class QdrantVectorStore : IVectorStore
                     ["endPosition"] = chunk.EndPosition,
                     ["fileName"] = chunk.Metadata.GetValueOrDefault("fileName", ""),
                     ["contentType"] = chunk.Metadata.GetValueOrDefault("contentType", ""),
-                    // Argha - 2026-02-19 - Store tags as list payload for keyword filtering (Phase 2.3)
+                    // Argha - 2026-02-19 - Store tags as list payload for keyword filtering 
                     ["tags"] = tagsValue
                 }
             };
@@ -121,7 +121,7 @@ public class QdrantVectorStore : IVectorStore
         }
     }
 
-    // Argha - 2026-02-19 - Added filterByTags; uses Must conditions per tag for AND semantics (Phase 2.3)
+    // Argha - 2026-02-19 - Added filterByTags; uses Must conditions per tag for AND semantics 
     public async Task<List<SearchResult>> SearchAsync(
         float[] queryEmbedding,
         int topK = 5,
@@ -148,7 +148,7 @@ public class QdrantVectorStore : IVectorStore
 
             if (filterByTags?.Count > 0)
             {
-                // Argha - 2026-02-19 - Each tag becomes a Must condition — AND semantics (Phase 2.3)
+                // Argha - 2026-02-19 - Each tag becomes a Must condition — AND semantics 
                 foreach (var tag in filterByTags)
                 {
                     conditions.Add(new Condition
@@ -198,7 +198,7 @@ public class QdrantVectorStore : IVectorStore
         }
     }
 
-    // Argha - 2026-02-20 - Same as SearchAsync but requests vectors back for MMR re-ranking (Phase 3.2)
+    // Argha - 2026-02-20 - Same as SearchAsync but requests vectors back for MMR re-ranking 
     public async Task<List<SearchResult>> SearchWithEmbeddingsAsync(
         float[] queryEmbedding,
         int topK = 5,
@@ -245,7 +245,7 @@ public class QdrantVectorStore : IVectorStore
                     filter.Must.Add(c);
             }
 
-            // Argha - 2026-02-20 - Pass vectorsSelector: true so ScoredPoint.Vectors is populated (Phase 3.2)
+            // Argha - 2026-02-20 - Pass vectorsSelector: true so ScoredPoint.Vectors is populated 
             var results = await _client.SearchAsync(
                 collectionName: _config.CollectionName,
                 vector: queryEmbedding,
@@ -267,7 +267,7 @@ public class QdrantVectorStore : IVectorStore
                 {
                     ["contentType"] = r.Payload["contentType"].StringValue
                 },
-                // Argha - 2026-02-20 - Convert protobuf RepeatedField<float> to float[] for MMR (Phase 3.2)
+                // Argha - 2026-02-20 - Convert protobuf RepeatedField<float> to float[] for MMR 
                 Embedding = r.Vectors?.Vector?.Data.ToArray()
             }).ToList();
         }
@@ -278,7 +278,7 @@ public class QdrantVectorStore : IVectorStore
         }
     }
 
-    // Argha - 2026-02-20 - Full-text keyword search using Qdrant payload index (Phase 3.1)
+    // Argha - 2026-02-20 - Full-text keyword search using Qdrant payload index 
     public async Task<List<SearchResult>> KeywordSearchAsync(
         string query,
         int topK = 5,
@@ -319,7 +319,7 @@ public class QdrantVectorStore : IVectorStore
                 }
             }
 
-            // Argha - 2026-02-20 - Add full-text match condition on 'content' field (Phase 3.1)
+            // Argha - 2026-02-20 - Add full-text match condition on 'content' field 
             conditions.Add(new Condition
             {
                 Field = new FieldCondition
@@ -333,7 +333,7 @@ public class QdrantVectorStore : IVectorStore
             foreach (var c in conditions)
                 filter.Must.Add(c);
 
-            // Argha - 2026-02-20 - ScrollAsync returns ScrollResponse (protobuf); access .Result for the points list (Phase 3.1)
+            // Argha - 2026-02-20 - ScrollAsync returns ScrollResponse (protobuf); access .Result for the points list 
             var scrollResponse = await _client.ScrollAsync(
                 collectionName: _config.CollectionName,
                 filter: filter,
@@ -347,7 +347,7 @@ public class QdrantVectorStore : IVectorStore
                 DocumentId = Guid.Parse(r.Payload["documentId"].StringValue),
                 FileName = r.Payload["fileName"].StringValue,
                 Content = r.Payload["content"].StringValue,
-                // Argha - 2026-02-20 - Score=1.0 placeholder; actual ranking done via RRF in RagService (Phase 3.1)
+                // Argha - 2026-02-20 - Score=1.0 placeholder; actual ranking done via RRF in RagService 
                 Score = 1.0,
                 ChunkIndex = (int)r.Payload["chunkIndex"].IntegerValue,
                 Metadata = new Dictionary<string, string>

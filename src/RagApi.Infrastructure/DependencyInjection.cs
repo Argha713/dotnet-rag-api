@@ -1,3 +1,5 @@
+using Azure;
+using Azure.Search.Documents.Indexes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,10 +23,12 @@ public static class DependencyInjection
         // Bind configuration
         services.Configure<AiConfiguration>(configuration.GetSection(AiConfiguration.SectionName));
         services.Configure<QdrantConfiguration>(configuration.GetSection(QdrantConfiguration.SectionName));
-        // Argha - 2026-02-20 - Register SearchOptions for hybrid search and re-ranking (Phase 3.1)
+        // Argha - 2026-02-20 - Register SearchOptions for hybrid search and re-ranking 
         services.Configure<SearchOptions>(configuration.GetSection(SearchOptions.SectionName));
-        // Argha - 2026-02-20 - Register DocumentProcessingOptions for configurable chunking (Phase 3.3)
+        // Argha - 2026-02-20 - Register DocumentProcessingOptions for configurable chunking 
         services.Configure<DocumentProcessingOptions>(configuration.GetSection(DocumentProcessingOptions.SectionName));
+        // Argha - 2026-02-21 - Register VectorStoreConfiguration for provider switching (Phase 5.1)
+        services.Configure<VectorStoreConfiguration>(configuration.GetSection(VectorStoreConfiguration.SectionName));
 
         var aiConfig = configuration.GetSection(AiConfiguration.SectionName).Get<AiConfiguration>() 
             ?? new AiConfiguration();
@@ -41,18 +45,37 @@ public static class DependencyInjection
             services.AddHttpClient<IChatService, OllamaChatService>();
         }
 
-        // Register vector store
-        services.AddSingleton<IVectorStore, QdrantVectorStore>();
+        // Argha - 2026-02-21 - Switch vector store backend based on VectorStore:Provider (Phase 5.1)
+        var vectorStoreConfig = configuration.GetSection(VectorStoreConfiguration.SectionName)
+            .Get<VectorStoreConfiguration>() ?? new VectorStoreConfiguration();
+
+        if (vectorStoreConfig.Provider.Equals("AzureAiSearch", StringComparison.OrdinalIgnoreCase))
+        {
+            var azSettings = vectorStoreConfig.AzureAiSearch;
+            services.AddSingleton(_ =>
+                new SearchIndexClient(
+                    new Uri(azSettings.Endpoint),
+                    new AzureKeyCredential(azSettings.ApiKey)));
+            services.AddSingleton(sp =>
+                sp.GetRequiredService<SearchIndexClient>()
+                  .GetSearchClient(azSettings.IndexName));
+            services.AddSingleton<IVectorStore, AzureAiSearchVectorStore>();
+        }
+        else
+        {
+            // Default: Qdrant (local / self-hosted)
+            services.AddSingleton<IVectorStore, QdrantVectorStore>();
+        }
 
         // Register document processor
         services.AddSingleton<IDocumentProcessor, DocumentProcessor>();
 
-        // Argha - 2026-02-15 - SQLite persistent document storage (Phase 1.3)
+        // Argha - 2026-02-15 - SQLite persistent document storage 
         var connectionString = configuration.GetConnectionString("DefaultConnection") ?? "Data Source=ragapi.db";
         services.AddDbContext<RagApiDbContext>(options => options.UseSqlite(connectionString));
         services.AddScoped<IDocumentRepository, DocumentRepository>();
 
-        // Argha - 2026-02-19 - Conversation session repository and service (Phase 2.2)
+        // Argha - 2026-02-19 - Conversation session repository and service 
         services.AddScoped<IConversationRepository, ConversationRepository>();
 
         // Register application services
@@ -60,10 +83,19 @@ public static class DependencyInjection
         services.AddScoped<DocumentService>();
         services.AddScoped<ConversationService>();
 
-        // Argha - 2026-02-15 - Real health checks for all dependencies (Phase 1.4)
+        // Argha - 2026-02-15 - Real health checks for all dependencies 
         var healthChecks = services.AddHealthChecks()
-            .AddCheck<QdrantHealthCheck>("qdrant", tags: ["dependency"])
             .AddCheck<SqliteHealthCheck>("sqlite", tags: ["dependency"]);
+
+        // Argha - 2026-02-21 - Register vector store health check based on active provider (Phase 5.1)
+        if (vectorStoreConfig.Provider.Equals("AzureAiSearch", StringComparison.OrdinalIgnoreCase))
+        {
+            healthChecks.AddCheck<AzureAiSearchHealthCheck>("azure-ai-search", tags: ["dependency"]);
+        }
+        else
+        {
+            healthChecks.AddCheck<QdrantHealthCheck>("qdrant", tags: ["dependency"]);
+        }
 
         if (aiConfig.Provider.Equals("AzureOpenAI", StringComparison.OrdinalIgnoreCase))
         {

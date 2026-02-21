@@ -9,7 +9,7 @@ using RagApi.Domain.Entities;
 
 namespace RagApi.Tests.Unit.Services;
 
-// Argha - 2026-02-20 - Unit tests for hybrid search (RRF fusion) in RagService (Phase 3.1)
+// Argha - 2026-02-20 - Unit tests for hybrid search (RRF fusion) in RagService 
 public class HybridSearchTests
 {
     private readonly Mock<IVectorStore> _vectorStoreMock;

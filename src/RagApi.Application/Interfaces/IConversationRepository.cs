@@ -2,7 +2,7 @@ using RagApi.Domain.Entities;
 
 namespace RagApi.Application.Interfaces;
 
-// Argha - 2026-02-19 - Repository interface for server-side conversation sessions (Phase 2.2)
+// Argha - 2026-02-19 - Repository interface for server-side conversation sessions 
 
 /// <summary>
 /// Data access interface for conversation sessions
