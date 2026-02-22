@@ -1,0 +1,281 @@
+@* Argha - 2026-02-21 - Document management page: upload, list, delete, filter by tag  *@
+@page "/documents"
+@inject DocumentApiService DocumentService
+
+<PageTitle>Documents — RAG Chat</PageTitle>
+
+<div class="page-body-scroll">
+<div class="container-fluid py-3">
+
+    <h2 class="mb-3">Documents</h2>
+
+    @* ---- Upload card ---- *@
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">Upload Document</div>
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label small text-muted">File (PDF, DOCX, TXT, MD)</label>
+                    <InputFile OnChange="OnFileSelected"
+                               accept=".pdf,.docx,.txt,.md"
+                               class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-muted">Tags (comma-separated)</label>
+                    <input type="text" class="form-control" placeholder="e.g. finance, q3"
+                           @bind="_tagsInput" @bind:event="oninput" />
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-primary w-100"
+                            @onclick="UploadAsync"
+                            disabled="@(_selectedFile == null || _isUploading)">
+                        @if (_isUploading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            <span>Uploading…</span>
+                        }
+                        else
+                        {
+                            <span>&#x2B06; Upload</span>
+                        }
+                    </button>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_uploadMessage))
+            {
+                <div class="alert @(_uploadSuccess ? "alert-success" : "alert-danger") mt-2 py-2 mb-0 small">
+                    @_uploadMessage
+                </div>
+            }
+        </div>
+    </div>
+
+    @* ---- Documents table ---- *@
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="fw-semibold">Uploaded Documents (@_documents.Count)</span>
+            <div class="d-flex gap-2">
+                <input type="text" class="form-control form-control-sm" style="width:180px"
+                       placeholder="Filter by tag…"
+                       @bind="_tagFilter" @bind:event="oninput" />
+                <button class="btn btn-sm btn-outline-secondary" @onclick="ApplyFilterAsync">Filter</button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => LoadDocumentsAsync(null)">&#x21BB; All</button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            @if (_isLoading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border" role="status"></div>
+                </div>
+            }
+            else if (_documents.Count == 0)
+            {
+                <p class="text-center text-muted py-4 mb-0">No documents found.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>File</th>
+                                <th>Status</th>
+                                <th>Chunks</th>
+                                <th>Tags</th>
+                                <th>Uploaded</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var doc in _documents)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="fw-medium">@doc.FileName</div>
+                                        <small class="text-muted">@FormatFileSize(doc.FileSize)</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge @GetStatusBadgeClass(doc.Status)">@doc.Status</span>
+                                        @if (doc.ErrorMessage != null)
+                                        {
+                                            <small class="d-block text-danger">@doc.ErrorMessage</small>
+                                        }
+                                    </td>
+                                    <td>@doc.ChunkCount</td>
+                                    <td>
+                                        @foreach (var tag in doc.Tags)
+                                        {
+                                            <span class="badge bg-secondary me-1">@tag</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div>@doc.UploadedAt.ToString("MMM d, yyyy")</div>
+                                        @if (doc.UpdatedAt.HasValue)
+                                        {
+                                            <small class="text-muted">Updated @doc.UpdatedAt.Value.ToString("MMM d")</small>
+                                        }
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger"
+                                                @onclick="() => DeleteDocumentAsync(doc.Id)"
+                                                disabled="@_deletingIds.Contains(doc.Id)">
+                                            @if (_deletingIds.Contains(doc.Id))
+                                            {
+                                                <span class="spinner-border spinner-border-sm"></span>
+                                            }
+                                            else { <span>Delete</span> }
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    @* ---- Supported types ---- *@
+    @if (_supportedTypes.Count > 0)
+    {
+        <div class="mt-3">
+            <small class="text-muted me-1">Supported formats:</small>
+            @foreach (var t in _supportedTypes)
+            {
+                <span class="badge bg-light text-dark border me-1">@t</span>
+            }
+        </div>
+    }
+
+</div>
+</div>
+
+@code {
+    private List<DocumentDto> _documents = new();
+    private List<string> _supportedTypes = new();
+
+    private IBrowserFile? _selectedFile;
+    private string _tagsInput = string.Empty;
+    private string _tagFilter = string.Empty;
+
+    private bool _isLoading = true;
+    private bool _isUploading = false;
+    private string _uploadMessage = string.Empty;
+    private bool _uploadSuccess = false;
+
+    private HashSet<Guid> _deletingIds = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(
+            LoadDocumentsAsync(null),
+            LoadSupportedTypesAsync());
+    }
+
+    private async Task LoadDocumentsAsync(string? tag)
+    {
+        _isLoading = true;
+        StateHasChanged();
+        try
+        {
+            _documents = await DocumentService.GetDocumentsAsync(tag);
+        }
+        catch (Exception ex)
+        {
+            _uploadMessage = $"Failed to load documents: {ex.Message}";
+            _uploadSuccess = false;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadSupportedTypesAsync()
+    {
+        try { _supportedTypes = await DocumentService.GetSupportedTypesAsync(); }
+        catch { /* non-critical */ }
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedFile = e.File;
+        _uploadMessage = string.Empty;
+    }
+
+    private async Task UploadAsync()
+    {
+        if (_selectedFile == null) return;
+
+        _isUploading = true;
+        _uploadMessage = string.Empty;
+
+        try
+        {
+            var tags = _tagsInput
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList();
+
+            // Argha - 2026-02-21 - Open IBrowserFile stream here; pass to service to keep service testable
+            using var stream = _selectedFile.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            await DocumentService.UploadDocumentAsync(
+                stream, _selectedFile.Name,
+                string.IsNullOrEmpty(_selectedFile.ContentType) ? "application/octet-stream" : _selectedFile.ContentType,
+                tags);
+
+            _uploadSuccess = true;
+            _uploadMessage = $"'{_selectedFile.Name}' uploaded successfully.";
+            _selectedFile = null;
+            _tagsInput = string.Empty;
+            await LoadDocumentsAsync(null);
+        }
+        catch (Exception ex)
+        {
+            _uploadSuccess = false;
+            _uploadMessage = $"Upload failed: {ex.Message}";
+        }
+        finally
+        {
+            _isUploading = false;
+        }
+    }
+
+    private async Task ApplyFilterAsync()
+    {
+        await LoadDocumentsAsync(string.IsNullOrWhiteSpace(_tagFilter) ? null : _tagFilter.Trim());
+    }
+
+    private async Task DeleteDocumentAsync(Guid id)
+    {
+        _deletingIds.Add(id);
+        try
+        {
+            await DocumentService.DeleteDocumentAsync(id);
+            _documents.RemoveAll(d => d.Id == id);
+        }
+        catch (Exception ex)
+        {
+            _uploadMessage = $"Delete failed: {ex.Message}";
+            _uploadSuccess = false;
+        }
+        finally
+        {
+            _deletingIds.Remove(id);
+        }
+    }
+
+    private string GetStatusBadgeClass(string status) => status switch
+    {
+        "Completed"  => "bg-success",
+        "Processing" => "bg-warning text-dark",
+        "Failed"     => "bg-danger",
+        _            => "bg-secondary"
+    };
+
+    private static string FormatFileSize(long bytes) =>
+        bytes < 1024       ? $"{bytes} B" :
+        bytes < 1_048_576  ? $"{bytes / 1024.0:F1} KB" :
+                             $"{bytes / 1_048_576.0:F1} MB";
+}

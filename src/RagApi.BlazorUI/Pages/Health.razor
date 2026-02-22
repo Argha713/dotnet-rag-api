@@ -1,0 +1,176 @@
+@* Argha - 2026-02-21 - System health page: per-dependency status cards + 30 s auto-refresh  *@
+@page "/health"
+@inject HttpClient Http
+@implements IAsyncDisposable
+
+<PageTitle>Health — RAG Chat</PageTitle>
+
+<div class="page-body-scroll">
+<div class="container-fluid py-3">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">System Health</h2>
+        <div class="d-flex align-items-center gap-3">
+            <small class="text-muted">
+                @if (_lastChecked.HasValue)
+                {
+                    <span>Last checked: @_lastChecked.Value.ToString("HH:mm:ss")</span>
+                }
+            </small>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="CheckHealthAsync" disabled="@_isLoading">
+                &#x21BB; Refresh
+            </button>
+        </div>
+    </div>
+
+    @if (_isLoading && _report == null)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border" role="status"></div>
+            <p class="mt-2 text-muted">Checking health…</p>
+        </div>
+    }
+    else if (_errorMessage != null)
+    {
+        <div class="alert alert-danger">
+            <strong>Could not reach API:</strong> @_errorMessage
+            <div class="mt-1 small">Make sure the API is running at the configured <code>ApiBaseUrl</code>.</div>
+        </div>
+    }
+    else if (_report != null)
+    {
+        @* Overall status banner *@
+        <div class="alert @GetAlertClass(_report.Status) d-flex align-items-center gap-2 mb-4">
+            <span style="font-size:1.3rem;">@GetStatusEmoji(_report.Status)</span>
+            <div>
+                <strong>Overall: @_report.Status</strong>
+                <span class="ms-2 fw-normal small">(@_report.TotalDuration)</span>
+            </div>
+        </div>
+
+        @* Per-dependency cards *@
+        <div class="row g-3">
+            @foreach (var check in _report.Checks)
+            {
+                <div class="col-md-4 col-sm-6">
+                    <div class="card h-100 health-card border-@GetBorderColor(check.Status)">
+                        <div class="card-header bg-@GetBgColor(check.Status) text-white d-flex justify-content-between align-items-center">
+                            <strong>@check.Name.ToUpperInvariant()</strong>
+                            <span class="badge bg-white text-dark">@check.Status</span>
+                        </div>
+                        <div class="card-body">
+                            @if (!string.IsNullOrEmpty(check.Description))
+                            {
+                                <p class="mb-2 small">@check.Description</p>
+                            }
+                            <small class="text-muted">&#x23F1; @check.Duration</small>
+                            @if (!string.IsNullOrEmpty(check.Error))
+                            {
+                                <div class="alert alert-danger mt-2 py-1 px-2 mb-0 small">@check.Error</div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+</div>
+</div>
+
+@code {
+    private HealthReport? _report;
+    private bool _isLoading = true;
+    private string? _errorMessage;
+    private DateTime? _lastChecked;
+
+    // Argha - 2026-02-21 - Auto-refresh every 30 s via System.Timers.Timer
+    private System.Timers.Timer? _refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckHealthAsync();
+
+        _refreshTimer = new System.Timers.Timer(30_000);
+        _refreshTimer.Elapsed += async (_, _) => await InvokeAsync(async () =>
+        {
+            await CheckHealthAsync();
+            StateHasChanged();
+        });
+        _refreshTimer.AutoReset = true;
+        _refreshTimer.Start();
+    }
+
+    private async Task CheckHealthAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            _report = await Http.GetFromJsonAsync<HealthReport>("/api/system/health");
+            _lastChecked = DateTime.Now;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private static string GetAlertClass(string status) => status switch
+    {
+        "Healthy"  => "alert-success",
+        "Degraded" => "alert-warning",
+        _          => "alert-danger"
+    };
+
+    private static string GetBorderColor(string status) => status switch
+    {
+        "Healthy"  => "success",
+        "Degraded" => "warning",
+        _          => "danger"
+    };
+
+    private static string GetBgColor(string status) => status switch
+    {
+        "Healthy"  => "success",
+        "Degraded" => "warning",
+        _          => "danger"
+    };
+
+    private static string GetStatusEmoji(string status) => status switch
+    {
+        "Healthy"  => "&#x2705;",
+        "Degraded" => "&#x26A0;&#xFE0F;",
+        _          => "&#x274C;"
+    };
+
+    public ValueTask DisposeAsync()
+    {
+        _refreshTimer?.Stop();
+        _refreshTimer?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+
+    // ---- Inner types ----
+
+    private class HealthReport
+    {
+        public string Status { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; }
+        public string TotalDuration { get; set; } = string.Empty;
+        public List<HealthCheckEntry> Checks { get; set; } = new();
+    }
+
+    private class HealthCheckEntry
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string Duration { get; set; } = string.Empty;
+        public string? Error { get; set; }
+    }
+}

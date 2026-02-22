@@ -32,7 +32,7 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **.NE
 - **Document update & re-process** — Replace document content in-place with `PUT /api/documents/{id}`; preserves ID, updates vector index
 - **Export conversation history** — Download any session as JSON, Markdown, or plain text via `GET /api/conversations/{id}/export`
 - **Structured logging (Serilog)** — Rolling daily log files, per-request correlation IDs (`X-Correlation-ID`), and enriched console output; all configured via `appsettings.json`
-- **209 unit tests** — xUnit + Moq + FluentAssertions covering all layers
+- **221 unit tests** — xUnit + Moq + FluentAssertions covering all layers
 - **Docker-ready** — One command to spin up all dependencies
 - **Swagger UI** — Interactive API documentation at the root URL
 
@@ -107,7 +107,15 @@ docker exec rag-ollama ollama pull llama3.2
 dotnet run --project src/RagApi.Api
 ```
 
-### 5. Open Swagger UI
+### 5. Run the Blazor Chat UI (optional)
+
+```bash
+dotnet run --project src/RagApi.BlazorUI
+```
+
+Navigate to **https://localhost:7001** (or the port shown in your terminal) for the chat interface.
+
+### 6. Open Swagger UI
 
 Navigate to **http://localhost:5000** in your browser to explore the API interactively.
 
@@ -296,6 +304,7 @@ Qdrant__Port=6334
 | **DOCX Parsing** | DocumentFormat.OpenXml |
 | **Database** | SQLite + Entity Framework Core |
 | **Logging** | Serilog (Console + File sinks, structured) |
+| **Frontend** | Blazor WebAssembly (.NET 8) |
 | **Testing** | xUnit, Moq, FluentAssertions |
 | **API Docs** | Swagger / OpenAPI |
 
@@ -308,6 +317,7 @@ dotnet-rag-api/
 ├── src/
 │   ├── RagApi.Api/              # Web API (Controllers, DTOs)
 │   ├── RagApi.Application/      # Business logic, Service interfaces
+│   ├── RagApi.BlazorUI/         # Blazor WebAssembly chat UI
 │   ├── RagApi.Domain/           # Core entities
 │   └── RagApi.Infrastructure/   # External services (Qdrant, Ollama, Azure)
 ├── tests/
@@ -366,7 +376,7 @@ dotnet-rag-api/
 ### Phase 6: Frontend & DevOps ✅
 - [x] Structured logging (Serilog)
 - [ ] GitHub Actions CI/CD
-- [ ] Blazor WebAssembly chat UI
+- [x] Blazor WebAssembly chat UI
 - [ ] Full Docker Compose (API + UI + services)
 
 ---

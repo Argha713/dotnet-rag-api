@@ -5,7 +5,7 @@ namespace RagApi.Application.Services;
 /// <summary>
 /// Implements Maximal Marginal Relevance (MMR) re-ranking to reduce redundancy in search results.
 /// </summary>
-// Argha - 2026-02-20 - MMR re-ranking for Phase 3.2
+// Argha - 2026-02-20 - MMR re-ranking
 public static class MmrReRanker
 {
     /// <summary>

@@ -17,7 +17,7 @@ public class RequestLoggingMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        // Argha - 2026-02-21 - Read or generate correlation ID; propagate on response header and push to Serilog LogContext (Phase 6.1)
+        // Argha - 2026-02-21 - Read or generate correlation ID; propagate on response header and push to Serilog LogContext
         var correlationId = context.Request.Headers["X-Correlation-ID"].FirstOrDefault()
                             ?? Guid.NewGuid().ToString("N");
         context.Response.Headers["X-Correlation-ID"] = correlationId;

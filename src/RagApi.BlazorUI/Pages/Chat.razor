@@ -1,0 +1,306 @@
+@* Argha - 2026-02-21 - Main chat page: sidebar with conversation list + streaming message panel  *@
+@page "/"
+@inject ChatApiService ChatService
+@inject ConversationApiService ConversationService
+@inject LocalStorageService LocalStorage
+@implements IAsyncDisposable
+
+<PageTitle>Chat — RAG Chat</PageTitle>
+
+<div class="chat-layout">
+
+    @* ---- Left sidebar: conversation list ---- *@
+    <div class="chat-sidebar">
+        <button class="btn btn-primary w-100 mb-3" @onclick="CreateNewConversationAsync" disabled="@_isStreaming">
+            + New Chat
+        </button>
+
+        <div class="conv-list">
+            @foreach (var conv in _conversations)
+            {
+                <div class="conv-item @(conv.Id == _activeConvId ? "active" : "")"
+                     @onclick="() => SelectConversationAsync(conv.Id)">
+                    <div class="conv-info">
+                        <div class="conv-title" title="@conv.Title">@(conv.Title ?? "New chat")</div>
+                        <div class="conv-date">@conv.CreatedAt.ToString("MMM d")</div>
+                    </div>
+                    <button class="btn btn-sm btn-outline-danger conv-delete"
+                            @onclick:stopPropagation="true"
+                            @onclick="() => DeleteConversationAsync(conv.Id)">&#215;</button>
+                </div>
+            }
+
+            @if (_conversations.Count == 0)
+            {
+                <p class="text-muted small text-center mt-3">No conversations yet.</p>
+            }
+        </div>
+    </div>
+
+    @* ---- Right panel: messages + input ---- *@
+    <div class="chat-panel">
+        @if (_activeConvId == Guid.Empty)
+        {
+            <div class="chat-empty">
+                <div style="font-size:3rem;">&#x1F916;</div>
+                <h4>Welcome to RAG Chat</h4>
+                <p class="text-muted">Click <strong>+ New Chat</strong> to start a conversation.</p>
+            </div>
+        }
+        else
+        {
+            <div class="messages-container" @ref="_messagesContainer">
+                @foreach (var msg in _messages)
+                {
+                    <div class="message @msg.Role">
+                        <div class="bubble">
+                            @if (msg.IsStreaming)
+                            {
+                                @msg.Content<span class="typing-cursor">&#x25AE;</span>
+                            }
+                            else
+                            {
+                                @msg.Content
+                            }
+                        </div>
+
+                        @if (msg.Sources?.Count > 0)
+                        {
+                            <details class="sources-panel">
+                                <summary>&#x1F4C4; @msg.Sources.Count source(s)</summary>
+                                @foreach (var src in msg.Sources)
+                                {
+                                    <div class="source-item">
+                                        <div class="source-header">
+                                            <strong>@src.FileName</strong>
+                                            <span class="badge bg-secondary">@src.RelevanceScore.ToString("F2")</span>
+                                        </div>
+                                        <p class="source-text">@src.RelevantText</p>
+                                    </div>
+                                }
+                            </details>
+                        }
+                    </div>
+                }
+
+                @* Placeholder bubble shown before first token arrives *@
+                @if (_isStreaming && !_messages.Any(m => m.IsStreaming))
+                {
+                    <div class="message assistant">
+                        <div class="bubble"><span class="typing-cursor">&#x25AE;</span></div>
+                    </div>
+                }
+            </div>
+
+            <div class="input-area">
+                @if (!string.IsNullOrEmpty(_errorMessage))
+                {
+                    <div class="alert alert-danger py-1 px-2 mb-2 small">@_errorMessage</div>
+                }
+                <div class="input-group">
+                    <textarea class="form-control"
+                              @bind="_inputText"
+                              @bind:event="oninput"
+                              @onkeydown="HandleKeyDownAsync"
+                              placeholder="Ask a question about your documents..."
+                              rows="2"
+                              disabled="@_isStreaming"></textarea>
+                    <button class="btn btn-primary" @onclick="SendMessageAsync"
+                            disabled="@(_isStreaming || string.IsNullOrWhiteSpace(_inputText))">
+                        @if (_isStreaming)
+                        {
+                            <span class="spinner-border spinner-border-sm" role="status"></span>
+                        }
+                        else
+                        {
+                            <span>Send</span>
+                        }
+                    </button>
+                </div>
+                <small class="text-muted">Ctrl+Enter to send</small>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    // ---- Conversation list (IDs persisted in localStorage) ----
+    private List<StoredConversation> _conversations = new();
+    private Guid _activeConvId = Guid.Empty;
+
+    // ---- Messages for active conversation ----
+    private List<UiMessage> _messages = new();
+
+    // ---- Input / streaming state ----
+    private string _inputText = string.Empty;
+    private bool _isStreaming = false;
+    private string _errorMessage = string.Empty;
+
+    private ElementReference _messagesContainer;
+    private CancellationTokenSource? _streamCts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Argha - 2026-02-21 - Restore stored conversations from localStorage on page load
+        var stored = await LocalStorage.GetItemAsync<List<StoredConversation>>("rag_conversations");
+        _conversations = stored ?? new List<StoredConversation>();
+
+        if (_conversations.Count > 0)
+            await SelectConversationAsync(_conversations[0].Id);
+    }
+
+    private async Task CreateNewConversationAsync()
+    {
+        try
+        {
+            var session = await ConversationService.CreateAsync();
+            var conv = new StoredConversation { Id = session.SessionId, Title = "New chat", CreatedAt = session.CreatedAt };
+            _conversations.Insert(0, conv);
+            await PersistConversationsAsync();
+            await SelectConversationAsync(session.SessionId);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to create conversation: {ex.Message}";
+        }
+    }
+
+    private async Task SelectConversationAsync(Guid id)
+    {
+        _activeConvId = id;
+        _messages = new();
+        _errorMessage = string.Empty;
+
+        try
+        {
+            var session = await ConversationService.GetAsync(id);
+            _messages = session.Messages
+                .Select(m => new UiMessage { Role = m.Role, Content = m.Content })
+                .ToList();
+        }
+        catch
+        {
+            // Session may not exist on server yet if just created — start with empty messages
+            _messages = new();
+        }
+    }
+
+    private async Task DeleteConversationAsync(Guid id)
+    {
+        try { await ConversationService.DeleteAsync(id); }
+        catch { /* best effort */ }
+
+        _conversations.RemoveAll(c => c.Id == id);
+        await PersistConversationsAsync();
+
+        if (_activeConvId == id)
+        {
+            _activeConvId = Guid.Empty;
+            _messages = new();
+            if (_conversations.Count > 0)
+                await SelectConversationAsync(_conversations[0].Id);
+        }
+    }
+
+    private async Task SendMessageAsync()
+    {
+        var query = _inputText.Trim();
+        if (string.IsNullOrEmpty(query) || _isStreaming) return;
+
+        // Auto-create a conversation if none is active
+        if (_activeConvId == Guid.Empty)
+            await CreateNewConversationAsync();
+        if (_activeConvId == Guid.Empty) return;
+
+        _inputText = string.Empty;
+        _errorMessage = string.Empty;
+        _isStreaming = true;
+
+        _messages.Add(new UiMessage { Role = "user", Content = query });
+
+        // Argha - 2026-02-21 - Add streaming placeholder; tokens append to Content as they arrive
+        var assistantMsg = new UiMessage { Role = "assistant", Content = string.Empty, IsStreaming = true };
+        _messages.Add(assistantMsg);
+
+        _streamCts = new CancellationTokenSource();
+
+        try
+        {
+            await ChatService.ChatStreamAsync(
+                new ChatRequest { Query = query, TopK = 5, SessionId = _activeConvId },
+                evt =>
+                {
+                    if (evt.Type == "sources")
+                    {
+                        assistantMsg.Sources = evt.Sources;
+                        assistantMsg.Model = evt.Model;
+                    }
+                    else if (evt.Type == "token" && evt.Content != null)
+                    {
+                        assistantMsg.Content += evt.Content;
+                    }
+                    StateHasChanged();
+                },
+                _streamCts.Token);
+        }
+        catch (OperationCanceledException) { /* navigated away or cancelled */ }
+        catch (Exception ex)
+        {
+            assistantMsg.Content = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            assistantMsg.IsStreaming = false;
+            _isStreaming = false;
+
+            // Argha - 2026-02-21 - Update conversation title from the first user message
+            if (_messages.Count(m => m.Role == "user") == 1)
+            {
+                var conv = _conversations.FirstOrDefault(c => c.Id == _activeConvId);
+                if (conv != null)
+                {
+                    conv.Title = query.Length > 45 ? query[..45] + "…" : query;
+                    await PersistConversationsAsync();
+                }
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && e.CtrlKey)
+            await SendMessageAsync();
+    }
+
+    private async Task PersistConversationsAsync()
+    {
+        await LocalStorage.SetItemAsync("rag_conversations", _conversations);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _streamCts?.Cancel();
+        _streamCts?.Dispose();
+        await ValueTask.CompletedTask;
+    }
+
+    // ---- Inner types (UI-only, not persisted to API) ----
+
+    private class StoredConversation
+    {
+        public Guid Id { get; set; }
+        public string? Title { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    private class UiMessage
+    {
+        public string Role { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+        public bool IsStreaming { get; set; }
+        public List<SourceCitationDto>? Sources { get; set; }
+        public string? Model { get; set; }
+    }
+}

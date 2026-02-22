@@ -28,7 +28,7 @@ public interface IDocumentProcessor
     IReadOnlyList<string> SupportedContentTypes { get; }
 }
 
-// Argha - 2026-02-20 - Chunking strategy selection for Phase 3.3
+// Argha - 2026-02-20 - Chunking strategy selection
 public enum ChunkingStrategy
 {
     /// <summary>Character-count-based splitting with overlap at paragraph boundaries (default).</summary>

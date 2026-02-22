@@ -15,7 +15,7 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Argha - 2026-02-21 - Replace default logging with Serilog; all sinks and levels configured in appsettings.json (Phase 6.1)
+// Argha - 2026-02-21 - Replace default logging with Serilog; all sinks and levels configured in appsettings.json
 builder.Host.UseSerilog((context, configuration) =>
     configuration.ReadFrom.Configuration(context.Configuration));
 

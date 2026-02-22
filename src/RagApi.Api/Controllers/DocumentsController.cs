@@ -41,11 +41,7 @@ public class DocumentsController : ControllerBase
     [ProducesResponseType(typeof(DocumentDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status415UnsupportedMediaType)]
-    public async Task<IActionResult> UploadDocument(
-        IFormFile file,
-        [FromForm] List<string>? tags,
-        [FromForm] string? chunkingStrategy,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> UploadDocument(IFormFile file, [FromForm] List<string>? tags, [FromForm] string? chunkingStrategy, CancellationToken cancellationToken)
     {
         if (file == null || file.Length == 0)
         {

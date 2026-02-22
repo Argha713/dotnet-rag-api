@@ -54,13 +54,7 @@ public class DocumentService
     /// </summary>
     // Argha - 2026-02-19 - Added optional tags parameter for metadata filtering 
     // Argha - 2026-02-20 - Added optional chunkingStrategy parameter for configurable chunking 
-    public async Task<Document> UploadDocumentAsync(
-        Stream fileStream,
-        string fileName,
-        string contentType,
-        List<string>? tags = null,
-        ChunkingStrategy? chunkingStrategy = null,
-        CancellationToken cancellationToken = default)
+    public async Task<Document> UploadDocumentAsync(Stream fileStream, string fileName, string contentType, List<string>? tags = null, ChunkingStrategy? chunkingStrategy = null, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Uploading document: {FileName} ({ContentType})", fileName, contentType);
 
@@ -92,7 +86,7 @@ public class DocumentService
             // Step 1: Extract text from document
             _logger.LogDebug("Extracting text from document {DocumentId}", document.Id);
             var text = await _documentProcessor.ExtractTextAsync(fileStream, contentType, cancellationToken);
-            
+
             if (string.IsNullOrWhiteSpace(text))
             {
                 throw new InvalidOperationException("No text content could be extracted from the document.");

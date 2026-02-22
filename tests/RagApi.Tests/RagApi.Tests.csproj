@@ -28,6 +28,7 @@
     <ProjectReference Include="..\..\src\RagApi.Application\RagApi.Application.csproj" />
     <ProjectReference Include="..\..\src\RagApi.Infrastructure\RagApi.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\RagApi.Api\RagApi.Api.csproj" />
+    <ProjectReference Include="..\..\src\RagApi.BlazorUI\RagApi.BlazorUI.csproj" />
   </ItemGroup>
 
 </Project>

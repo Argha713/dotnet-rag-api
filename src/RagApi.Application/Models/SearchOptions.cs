@@ -3,7 +3,7 @@ namespace RagApi.Application.Models;
 /// <summary>
 /// Configuration options for search behaviour (hybrid search, re-ranking)
 /// </summary>
-// Argha - 2026-02-20 - Config POCO for Phase 3 search features 
+// Argha - 2026-02-20 - Config POCO search features 
 public class SearchOptions
 {
     public const string SectionName = "Search";

@@ -67,7 +67,7 @@ public class RequestLoggingMiddlewareTests
             Times.Once);
     }
 
-    // Argha - 2026-02-21 - Correlation ID tests for Phase 6.1
+    // Argha - 2026-02-21 - Correlation ID tests
 
     [Fact]
     public async Task Invoke_NoCorrelationIdHeader_SetsNewCorrelationIdOnResponse()
