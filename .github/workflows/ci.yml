@@ -7,6 +7,12 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  actions: write
+  checks: write
+  contents: read
+  pull-requests: write
+
 jobs:
   build-and-test:
     name: Build & Test
