@@ -4,6 +4,7 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **.NE
 
 > Most RAG examples are Python-only. This project brings RAG to the .NET ecosystem with enterprise-grade architecture.
 
+![CI](https://github.com/Argha713/dotnet-rag-api/actions/workflows/ci.yml/badge.svg)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat&logo=dotnet)
 ![C#](https://img.shields.io/badge/C%23-12-239120?style=flat&logo=csharp)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
@@ -375,7 +376,7 @@ dotnet-rag-api/
 
 ### Phase 6: Frontend & DevOps ✅
 - [x] Structured logging (Serilog)
-- [ ] GitHub Actions CI/CD
+- [x] GitHub Actions CI/CD
 - [x] Blazor WebAssembly chat UI
 - [ ] Full Docker Compose (API + UI + services)
 
