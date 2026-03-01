@@ -9,8 +9,8 @@ COPY ["src/RagApi.Application/RagApi.Application.csproj", "src/RagApi.Applicatio
 COPY ["src/RagApi.Domain/RagApi.Domain.csproj", "src/RagApi.Domain/"]
 COPY ["src/RagApi.Infrastructure/RagApi.Infrastructure.csproj", "src/RagApi.Infrastructure/"]
 
-# Restore dependencies
-RUN dotnet restore
+# Argha - 2026-03-01 - Restore only the API project (not tests or BlazorUI — not needed in this image)
+RUN dotnet restore src/RagApi.Api/RagApi.Api.csproj
 
 # Copy everything else
 COPY . .
