@@ -217,7 +217,12 @@ app.UseMiddleware<GlobalExceptionMiddleware>();
 // Argha - 2026-02-15 - Log method, path, status code, and elapsed time for every request
 app.UseMiddleware<RequestLoggingMiddleware>();
 
-// Argha - 2026-02-20 - Reject requests missing or with invalid X-Api-Key header 
+// Argha - 2026-03-02 - CORS must come before ApiKeyMiddleware so that browser OPTIONS preflights
+// are short-circuited by UseCors() and never reach ApiKeyMiddleware (which would 401 them).
+// Without this order, all cross-origin requests appear as CORS errors even when the API key is valid.
+app.UseCors();
+
+// Argha - 2026-02-20 - Reject requests missing or with invalid X-Api-Key header
 app.UseMiddleware<ApiKeyMiddleware>();
 
 // Configure the HTTP request pipeline
@@ -230,8 +235,6 @@ if (app.Environment.IsDevelopment())
         options.RoutePrefix = string.Empty; // Serve Swagger UI at root
     });
 }
-
-app.UseCors();
 app.UseAuthorization();
 
 // Argha - 2026-02-20 - Apply rate limiting after auth; only active when Enabled=true in config 
