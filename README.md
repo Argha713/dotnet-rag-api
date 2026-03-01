@@ -17,7 +17,7 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **.NE
 - **Semantic search** — Find relevant content using vector similarity
 - **RAG-powered chat** — Get AI answers grounded in your documents
 - **Source citations** — Every answer includes references to source documents
-- **Dual AI provider support** — Ollama (local) or Azure OpenAI (cloud)
+- **Triple AI provider support** — Ollama (local), Azure OpenAI, or OpenAI API directly (gpt-4o-mini)
 - **Persistent storage** — SQLite + EF Core for document metadata
 - **Real health checks** — Per-dependency status for Qdrant, Ollama, and SQLite
 - **Global error handling** — Exception middleware with structured JSON error responses
@@ -33,7 +33,7 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **.NE
 - **Document update & re-process** — Replace document content in-place with `PUT /api/documents/{id}`; preserves ID, updates vector index
 - **Export conversation history** — Download any session as JSON, Markdown, or plain text via `GET /api/conversations/{id}/export`
 - **Structured logging (Serilog)** — Rolling daily log files, per-request correlation IDs (`X-Correlation-ID`), and enriched console output; all configured via `appsettings.json`
-- **221 unit tests** — xUnit + Moq + FluentAssertions covering all layers
+- **236 unit tests** — xUnit + Moq + FluentAssertions covering all layers
 - **Docker-ready** — One command to spin up all dependencies
 - **Swagger UI** — Interactive API documentation at the root URL
 
@@ -278,6 +278,33 @@ Change the `Provider` and fill in your Azure details:
 }
 ```
 
+### Switch to OpenAI API (gpt-4o-mini — lowest cost)
+
+Set `Provider` to `OpenAI` and supply your API key:
+
+```json
+{
+  "AI": {
+    "Provider": "OpenAI",
+    "OpenAi": {
+      "ApiKey": "sk-...",
+      "ChatModel": "gpt-4o-mini",
+      "EmbeddingModel": "text-embedding-3-small",
+      "EmbeddingDimension": 1536
+    }
+  }
+}
+```
+
+Or via environment variables (recommended for production):
+
+```bash
+AI__Provider=OpenAI
+AI__OpenAi__ApiKey=sk-...
+```
+
+> **Cost note:** gpt-4o-mini + text-embedding-3-small costs ~$0.20–1.50/month for 50 demo visitors at 10 queries each.
+
 ### Environment Variables
 
 All settings can be overridden with environment variables (using `__` as separator):
@@ -288,6 +315,7 @@ AI__AzureOpenAI__Endpoint=https://...
 AI__AzureOpenAI__ApiKey=your-key
 Qdrant__Host=localhost
 Qdrant__Port=6334
+Qdrant__ApiKey=your-qdrant-cloud-key   # for Qdrant Cloud
 ```
 
 ---
@@ -298,7 +326,7 @@ Qdrant__Port=6334
 |-----------|------------|
 | **Framework** | .NET 8, ASP.NET Core |
 | **AI (Local)** | Ollama (llama3.2, nomic-embed-text) |
-| **AI (Cloud)** | Azure OpenAI |
+| **AI (Cloud)** | Azure OpenAI, OpenAI API (gpt-4o-mini) |
 | **Vector DB (Cloud)** | Azure AI Search |
 | **Vector DB** | Qdrant |
 | **PDF Parsing** | PdfPig |
@@ -379,6 +407,12 @@ dotnet-rag-api/
 - [x] GitHub Actions CI/CD
 - [x] Blazor WebAssembly chat UI
 - [x] Full Docker Compose (API + UI + services)
+
+### Phase 7: Azure Deployment with OpenAI Provider ✅
+- [x] OpenAI API provider (gpt-4o-mini + text-embedding-3-small) — no extra compute cost
+- [x] Qdrant Cloud API key support (for managed cloud cluster)
+- [x] GitHub Actions deploy workflow (GHCR → Azure Container Apps)
+- [x] 236 unit tests (15 new for OpenAI chat + embedding services)
 
 ---
 
