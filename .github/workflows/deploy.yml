@@ -26,30 +26,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/dotnet-rag-api
-          tags: |
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
+      - name: Build Docker image
+        run: docker build -t ghcr.io/${{ github.repository_owner }}/dotnet-rag-api:latest .
 
-      - name: Build and push API image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+      - name: Push Docker image
+        run: docker push ghcr.io/${{ github.repository_owner }}/dotnet-rag-api:latest
 
   # ── Deploy API to Azure Container Apps ───────────────────────────────────────
   deploy-api:
@@ -61,8 +45,6 @@ jobs:
       - name: Azure login
         uses: azure/login@v2
         with:
-          # AZURE_CREDENTIALS: JSON from `az ad sp create-for-rbac --json-auth ...`
-          # Stored in GitHub → Settings → Secrets → Actions → AZURE_CREDENTIALS
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Deploy to Azure Container Apps
