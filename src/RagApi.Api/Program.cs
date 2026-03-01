@@ -155,6 +155,18 @@ using (var scope = app.Services.CreateScope())
     {
         try
         {
+            // Argha - 2026-03-02 - Pre-create the SQLite file with DELETE journal mode before EF Core initializes.
+            // EF Core's Create() issues 'PRAGMA journal_mode = wal' for new databases, which hangs on
+            // Azure Files SMB (POSIX mmap not supported). Pre-creating the file makes Exists() return true,
+            // so EnsureCreatedAsync skips Create() and goes straight to CreateTablesAsync() — no WAL pragma.
+            await using (var preConn = new Microsoft.Data.Sqlite.SqliteConnection(dbContext.Database.GetConnectionString()))
+            {
+                await preConn.OpenAsync();
+                await using var preCmd = preConn.CreateCommand();
+                preCmd.CommandText = "PRAGMA journal_mode=DELETE;";
+                await preCmd.ExecuteScalarAsync();
+            }
+
             await dbContext.Database.EnsureCreatedAsync();
 
             // Argha - 2026-02-19 - Create ConversationSessions table on existing DBs
