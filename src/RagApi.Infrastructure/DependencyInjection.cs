@@ -41,6 +41,13 @@ public static class DependencyInjection
             services.AddHttpClient<IEmbeddingService, AzureOpenAiEmbeddingService>();
             services.AddHttpClient<IChatService, AzureOpenAiChatService>();
         }
+        // Argha - 2026-03-01 - OpenAI direct API provider (Phase 7): no extra compute cost
+        else if (aiConfig.Provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>();
+            services.AddHttpClient<IChatService, OpenAiChatService>();
+            // No Ollama health check needed; OpenAI is a managed external service
+        }
         else // Default to Ollama
         {
             services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>();
@@ -104,6 +111,11 @@ public static class DependencyInjection
         if (aiConfig.Provider.Equals("AzureOpenAI", StringComparison.OrdinalIgnoreCase))
         {
             // Azure OpenAI health check can be added in a future phase
+        }
+        // Argha - 2026-03-01 - OpenAI is a managed external service — no local health check needed
+        else if (aiConfig.Provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
+        {
+            // No Ollama health check for OpenAI provider
         }
         else
         {

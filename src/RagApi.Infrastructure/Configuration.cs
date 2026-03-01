@@ -6,14 +6,16 @@ namespace RagApi.Infrastructure;
 public class AiConfiguration
 {
     public const string SectionName = "AI";
-    
+
     /// <summary>
-    /// The active AI provider: "Ollama" or "AzureOpenAI"
+    /// The active AI provider: "Ollama", "AzureOpenAI", or "OpenAI"
     /// </summary>
     public string Provider { get; set; } = "Ollama";
-    
+
     public OllamaSettings Ollama { get; set; } = new();
     public AzureOpenAiSettings AzureOpenAI { get; set; } = new();
+    // Argha - 2026-03-01 - OpenAI direct API provider (Phase 7)
+    public OpenAiSettings OpenAi { get; set; } = new();
 }
 
 public class OllamaSettings
@@ -30,6 +32,16 @@ public class AzureOpenAiSettings
     public string ApiKey { get; set; } = string.Empty;
     public string EmbeddingDeployment { get; set; } = "text-embedding-ada-002";
     public string ChatDeployment { get; set; } = "gpt-4";
+    public int EmbeddingDimension { get; set; } = 1536;
+}
+
+// Argha - 2026-03-01 - OpenAI direct API settings (Phase 7)
+public class OpenAiSettings
+{
+    public string ApiKey { get; set; } = string.Empty;
+    public string BaseUrl { get; set; } = "https://api.openai.com/v1";
+    public string ChatModel { get; set; } = "gpt-4o-mini";
+    public string EmbeddingModel { get; set; } = "text-embedding-3-small";
     public int EmbeddingDimension { get; set; } = 1536;
 }
 
