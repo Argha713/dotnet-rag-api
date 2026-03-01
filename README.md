@@ -1,41 +1,70 @@
 # dotnet-rag-api
 
-A production-ready **Retrieval-Augmented Generation (RAG)** API built with **.NET 8**. Upload documents, ask questions, and get AI-powered answers with source citations.
+A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NET 8**. Upload documents, ask questions, and get AI-powered answers grounded in your content — with source citations.
 
-> Most RAG examples are Python-only. This project brings RAG to the .NET ecosystem with enterprise-grade architecture.
+> Most RAG examples are Python-only. This project brings RAG to the .NET ecosystem with enterprise-grade Clean Architecture.
 
-![CI](https://github.com/Argha713/dotnet-rag-api/actions/workflows/ci.yml/badge.svg)
+[![CI](https://github.com/Argha713/dotnet-rag-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Argha713/dotnet-rag-api/actions/workflows/ci.yml)
+[![Deploy](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml/badge.svg)](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat&logo=dotnet)
 ![C#](https://img.shields.io/badge/C%23-12-239120?style=flat&logo=csharp)
+![Tests](https://img.shields.io/badge/tests-236%20passing-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
+
+---
+
+## Live Demo
+
+| | URL |
+|---|---|
+| **Blazor Chat UI** | https://ambitious-glacier-0b62ea10f.6.azurestaticapps.net |
+| **REST API** | https://rag-api.calmsand-4a05cfa0.eastus.azurecontainerapps.io |
+| **Health Check** | https://rag-api.calmsand-4a05cfa0.eastus.azurecontainerapps.io/api/system/health |
 
 ---
 
 ## Features
 
-- **Multi-format document support** — PDF, DOCX, TXT, Markdown
-- **Semantic search** — Find relevant content using vector similarity
-- **RAG-powered chat** — Get AI answers grounded in your documents
-- **Source citations** — Every answer includes references to source documents
-- **Triple AI provider support** — Ollama (local), Azure OpenAI, or OpenAI API directly (gpt-4o-mini)
-- **Persistent storage** — SQLite + EF Core for document metadata
-- **Real health checks** — Per-dependency status for Qdrant, Ollama, and SQLite
-- **Global error handling** — Exception middleware with structured JSON error responses
-- **Request logging** — Method, path, status code, and elapsed time for every request
-- **Document tags** — Tag documents on upload; filter chat/search by tag for scoped retrieval
+### Document Processing
+- **Multi-format ingestion** — PDF, DOCX, TXT, Markdown
+- **Configurable chunking** — Fixed, Sentence, or Paragraph strategy per upload
+- **Batch upload** — Process 1–20 documents in a single request
+- **Document update & re-index** — Replace content in-place via `PUT /api/documents/{id}`; preserves ID and updates vector index
+- **Tag-based filtering** — Tag documents on upload; scope retrieval to specific tags
+
+### Search & Retrieval
+- **Semantic search** — Vector similarity via Qdrant
 - **Hybrid search** — Combines vector similarity with full-text keyword search using Reciprocal Rank Fusion (RRF)
-- **MMR re-ranking** — Maximal Marginal Relevance reorders results to reduce redundancy across retrieved chunks
-- **Configurable chunking** — Choose Fixed, Sentence, or Paragraph chunking strategy per upload
-- **API key authentication** — Protect all endpoints via `X-Api-Key` header; disabled when key is empty
-- **Rate limiting** — Configurable fixed-window rate limiter keyed by IP; opt-in via `RateLimit:Enabled`; health check always exempt
-- **Production CORS** — Configurable allowed origins via `appsettings.json`; empty list = allow any (dev default)
-- **FluentValidation** — Rich input validation for Tags list constraints and `ConversationMessage.Role` allowlist
-- **Document update & re-process** — Replace document content in-place with `PUT /api/documents/{id}`; preserves ID, updates vector index
-- **Export conversation history** — Download any session as JSON, Markdown, or plain text via `GET /api/conversations/{id}/export`
-- **Structured logging (Serilog)** — Rolling daily log files, per-request correlation IDs (`X-Correlation-ID`), and enriched console output; all configured via `appsettings.json`
-- **236 unit tests** — xUnit + Moq + FluentAssertions covering all layers
-- **Docker-ready** — One command to spin up all dependencies
-- **Swagger UI** — Interactive API documentation at the root URL
+- **MMR re-ranking** — Maximal Marginal Relevance reorders results to reduce redundancy
+- **Source citations** — Every answer includes references with relevance scores
+
+### AI Providers
+- **OpenAI** — `gpt-4o-mini` + `text-embedding-3-small` (production default, lowest cost)
+- **Azure OpenAI** — Any deployed model via your Azure resource
+- **Ollama** — Local models (`llama3.2`, `nomic-embed-text`) for offline/private use
+
+### Conversations
+- **Streaming responses** — Real-time answers via Server-Sent Events (SSE)
+- **Conversation memory** — Server-side session management with full message history
+- **Export history** — Download any session as JSON, Markdown, or plain text
+
+### Security & Reliability
+- **API key authentication** — Protect all endpoints via `X-Api-Key` header
+- **Rate limiting** — Configurable fixed-window limiter keyed by IP; health check always exempt
+- **Production CORS** — Configurable allowed origins; wildcard in development
+- **Input validation** — FluentValidation with structured error responses
+- **Global error handling** — Exception middleware with JSON error responses
+- **Structured logging** — Serilog with rolling daily files, per-request correlation IDs (`X-Correlation-ID`)
+- **Real health checks** — Per-dependency status for Qdrant, Ollama/OpenAI, and SQLite
+
+### Infrastructure
+- **Clean Architecture** — Domain → Application → Infrastructure → API
+- **Dual vector store** — Qdrant (local or cloud) or Azure AI Search
+- **SQLite + EF Core** — Persistent document metadata; no migrations required
+- **Docker Compose** — One command to spin up all local dependencies
+- **GitHub Actions CI/CD** — Automated test, build, and deploy pipeline
+- **Azure deployment** — Container Apps (scales to zero) + Static Web Apps (free tier)
+- **236 unit tests** — xUnit + Moq + FluentAssertions across all layers
 
 ---
 
@@ -44,129 +73,84 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **.NE
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         API Layer                               │
-│                    (ASP.NET Core Controllers)                   │
+│              (ASP.NET Core Controllers, Middleware)             │
 ├─────────────────────────────────────────────────────────────────┤
 │                      Application Layer                          │
 │              (RagService, DocumentService)                      │
 ├─────────────────────────────────────────────────────────────────┤
 │                     Infrastructure Layer                        │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │   Ollama    │  │   Qdrant    │  │   Document Processor    │  │
-│  │  Azure AI   │  │ VectorStore │  │   (PDF, DOCX, TXT)      │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+│  ┌──────────────────┐  ┌─────────────┐  ┌────────────────────┐  │
+│  │  OpenAI / Azure  │  │   Qdrant /  │  │ Document Processor │  │
+│  │  OpenAI / Ollama │  │  AI Search  │  │ (PDF, DOCX, TXT)   │  │
+│  └──────────────────┘  └─────────────┘  └────────────────────┘  │
 ├─────────────────────────────────────────────────────────────────┤
 │                        Domain Layer                             │
 │            (Entities, Interfaces, Value Objects)                │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### RAG Pipeline
+
+`POST /api/chat` → `RagService.ChatAsync()`:
+1. Generate query embedding via `IEmbeddingService`
+2. Hybrid search: vector similarity + full-text via `IVectorStore`
+3. MMR re-ranking to reduce redundancy
+4. Build context from top-K chunks
+5. Call `IChatService.GenerateResponseAsync()` with system prompt + context
+6. Return answer with source citations
+
 ---
 
-## Prerequisites
+## Quick Start (Local)
 
-Before you begin, make sure you have the following installed:
-
-- [**.NET 8 SDK**](https://dotnet.microsoft.com/download/dotnet/8.0) (or later) — verify with `dotnet --version`
-- [**Docker Desktop**](https://www.docker.com/get-started) — must be **running** (not just installed)
-- **~8 GB free RAM** — Ollama models require 4-8 GB of memory
-
----
-
-## Quick Start
-
-### 1. Clone the Repository
+**Prerequisites:** .NET 8 SDK, Docker Desktop
 
 ```bash
 git clone https://github.com/Argha713/dotnet-rag-api.git
 cd dotnet-rag-api
-```
 
-### 2. Start Docker Services
-
-Make sure **Docker Desktop is running**, then:
-
-```bash
+# Start Qdrant + Ollama
 docker-compose up -d
-```
 
-This starts:
-- **Qdrant** (vector database) on ports 6333 and 6334
-- **Ollama** (local LLM) on port 11434
-
-### 3. Pull Ollama Models (first time only)
-
-```bash
+# Pull models (first time only — ~2.5 GB)
 docker exec rag-ollama ollama pull nomic-embed-text
 docker exec rag-ollama ollama pull llama3.2
-```
 
-> **Note:** This downloads ~2.5 GB of model files. It only needs to be done once — the models persist in a Docker volume.
-
-### 4. Run the API
-
-```bash
+# Run the API (Swagger UI at http://localhost:5000)
 dotnet run --project src/RagApi.Api
-```
 
-### 5. Run the Blazor Chat UI (optional)
-
-```bash
+# Optional: run the Blazor chat UI
 dotnet run --project src/RagApi.BlazorUI
 ```
 
-Navigate to **https://localhost:7001** (or the port shown in your terminal) for the chat interface.
-
-### 6. Open Swagger UI
-
-Navigate to **http://localhost:5000** in your browser to explore the API interactively.
-
-### Verify Everything is Working
-
+Verify with:
 ```bash
-# Health check — returns per-dependency status (Qdrant, Ollama, SQLite)
 curl http://localhost:5000/api/system/health
-
-# System stats — shows connected models and vector store
-curl http://localhost:5000/api/system/stats
 ```
 
-> **Tip:** The first request after starting may be slow (10-30 seconds) as Ollama loads models into memory. Subsequent requests are much faster.
+> **Tip:** Use `setup.sh` (Linux/macOS) or `setup.bat` (Windows) to automate Docker + model setup.
 
 ---
 
-### Automated Setup (Alternative)
-
-Instead of steps 2-3 above, you can use the setup scripts that handle prerequisites checking, Docker services, and model pulling:
-
-```bash
-# Linux / macOS
-chmod +x setup.sh && ./setup.sh
-
-# Windows
-setup.bat
-```
-
----
-
-## API Endpoints
+## API Reference
 
 ### Documents
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/documents` | Upload a document (PDF, DOCX, TXT, MD); optional `tags` form fields |
-| `POST` | `/api/documents/batch` | Upload 1–20 documents in one request; returns per-file results |
-| `GET` | `/api/documents` | List all documents; optional `?tag=` query filter |
+| `POST` | `/api/documents` | Upload a document; optional `tags` form fields |
+| `POST` | `/api/documents/batch` | Upload 1–20 documents in one request |
+| `GET` | `/api/documents` | List all documents; optional `?tag=` filter |
 | `GET` | `/api/documents/{id}` | Get document by ID |
-| `PUT` | `/api/documents/{id}` | Replace document content and re-process; preserves ID |
-| `DELETE` | `/api/documents/{id}` | Delete a document and its vector data |
+| `PUT` | `/api/documents/{id}` | Replace document content and re-index |
+| `DELETE` | `/api/documents/{id}` | Delete document and its vector data |
 | `GET` | `/api/documents/supported-types` | List supported file types |
 
 ### Chat
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/chat` | Ask a question (RAG-powered) |
+| `POST` | `/api/chat` | RAG-powered question answering |
 | `POST` | `/api/chat/search` | Semantic search only (no LLM) |
 
 ### Conversations
@@ -175,148 +159,98 @@ setup.bat
 |--------|----------|-------------|
 | `POST` | `/api/conversations` | Create a new session |
 | `GET` | `/api/conversations/{id}` | Get session with full message history |
-| `GET` | `/api/conversations/{id}/export` | Download session as JSON, Markdown, or text (`?format=json\|markdown\|text`) |
+| `GET` | `/api/conversations/{id}/export` | Export as JSON, Markdown, or text |
 | `DELETE` | `/api/conversations/{id}` | Delete a session |
 
 ### System
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/system/health` | Health check |
-| `GET` | `/api/system/stats` | System statistics |
+| `GET` | `/api/system/health` | Per-dependency health status |
+| `GET` | `/api/system/stats` | Connected models and vector store info |
 
 ---
 
 ## Usage Example
 
-### 1. Upload a Document
-
 ```bash
+# Upload a document
 curl -X POST http://localhost:5000/api/documents \
-  -F "file=@./sample.pdf"
-```
+  -F "file=@./report.pdf" \
+  -F "tags=finance" \
+  -F "tags=q4"
 
-### 2. Ask a Question
-
-```bash
+# Ask a question (scoped to tag)
 curl -X POST http://localhost:5000/api/chat \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "What are the main points discussed in the document?",
-    "topK": 5
+    "query": "What were the key findings?",
+    "topK": 5,
+    "tags": ["finance"]
   }'
 ```
 
-### Response
-
+**Response:**
 ```json
 {
-  "answer": "Based on the document, the main points are...",
+  "answer": "Based on the Q4 report, the key findings are...",
   "sources": [
     {
       "documentId": "abc-123",
-      "fileName": "sample.pdf",
-      "relevantText": "The document discusses...",
-      "relevanceScore": 0.89
+      "fileName": "report.pdf",
+      "relevantText": "The report highlights...",
+      "relevanceScore": 0.91
     }
   ],
-  "model": "llama3.2"
+  "model": "gpt-4o-mini"
 }
-```
-
-### 3. Semantic Search (without LLM)
-
-```bash
-curl -X POST http://localhost:5000/api/chat/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "main topic", "topK": 3}'
 ```
 
 ---
 
 ## Configuration
 
-### Default Configuration (Ollama)
+### AI Provider
 
-The API uses Ollama by default. Configuration is in `src/RagApi.Api/appsettings.json`:
-
-```json
-{
-  "AI": {
-    "Provider": "Ollama",
-    "Ollama": {
-      "BaseUrl": "http://localhost:11434",
-      "EmbeddingModel": "nomic-embed-text",
-      "ChatModel": "llama3.2",
-      "EmbeddingDimension": 768
-    }
-  },
-  "Qdrant": {
-    "Host": "localhost",
-    "Port": 6334,
-    "CollectionName": "documents"
-  }
-}
-```
-
-### Switch to Azure OpenAI
-
-Change the `Provider` and fill in your Azure details:
-
-```json
-{
-  "AI": {
-    "Provider": "AzureOpenAI",
-    "AzureOpenAI": {
-      "Endpoint": "https://YOUR-RESOURCE.openai.azure.com",
-      "ApiKey": "YOUR-API-KEY",
-      "EmbeddingDeployment": "text-embedding-ada-002",
-      "ChatDeployment": "gpt-4",
-      "EmbeddingDimension": 1536
-    }
-  }
-}
-```
-
-### Switch to OpenAI API (gpt-4o-mini — lowest cost)
-
-Set `Provider` to `OpenAI` and supply your API key:
-
-```json
-{
-  "AI": {
-    "Provider": "OpenAI",
-    "OpenAi": {
-      "ApiKey": "sk-...",
-      "ChatModel": "gpt-4o-mini",
-      "EmbeddingModel": "text-embedding-3-small",
-      "EmbeddingDimension": 1536
-    }
-  }
-}
-```
-
-Or via environment variables (recommended for production):
+Set `AI__Provider` to `OpenAI`, `AzureOpenAI`, or `Ollama`:
 
 ```bash
+# OpenAI (production default)
 AI__Provider=OpenAI
 AI__OpenAi__ApiKey=sk-...
+AI__OpenAi__ChatModel=gpt-4o-mini
+AI__OpenAi__EmbeddingModel=text-embedding-3-small
+
+# Azure OpenAI
+AI__Provider=AzureOpenAI
+AI__AzureOpenAI__Endpoint=https://YOUR-RESOURCE.openai.azure.com
+AI__AzureOpenAI__ApiKey=your-key
+
+# Ollama (local)
+AI__Provider=Ollama
+AI__Ollama__BaseUrl=http://localhost:11434
 ```
 
-> **Cost note:** gpt-4o-mini + text-embedding-3-small costs ~$0.20–1.50/month for 50 demo visitors at 10 queries each.
-
-### Environment Variables
-
-All settings can be overridden with environment variables (using `__` as separator):
+### Qdrant Cloud
 
 ```bash
-AI__Provider=AzureOpenAI
-AI__AzureOpenAI__Endpoint=https://...
-AI__AzureOpenAI__ApiKey=your-key
-Qdrant__Host=localhost
+Qdrant__Host=your-cluster.aws.cloud.qdrant.io
 Qdrant__Port=6334
-Qdrant__ApiKey=your-qdrant-cloud-key   # for Qdrant Cloud
+Qdrant__UseTls=true
+Qdrant__ApiKey=your-qdrant-api-key
 ```
+
+### Security
+
+```bash
+ApiAuth__ApiKey=your-strong-api-key        # empty = auth disabled
+RateLimit__Enabled=true
+RateLimit__PermitLimit=10
+RateLimit__WindowSeconds=60
+Cors__AllowedOrigins__0=https://your-frontend.azurestaticapps.net
+```
+
+> **Cost:** OpenAI gpt-4o-mini + text-embedding-3-small costs ~$0.20–1.50/month for 50 visitors at 10 queries each.
 
 ---
 
@@ -325,16 +259,17 @@ Qdrant__ApiKey=your-qdrant-cloud-key   # for Qdrant Cloud
 | Component | Technology |
 |-----------|------------|
 | **Framework** | .NET 8, ASP.NET Core |
+| **AI (Cloud)** | OpenAI API (gpt-4o-mini), Azure OpenAI |
 | **AI (Local)** | Ollama (llama3.2, nomic-embed-text) |
-| **AI (Cloud)** | Azure OpenAI, OpenAI API (gpt-4o-mini) |
+| **Vector DB** | Qdrant (local or cloud) |
 | **Vector DB (Cloud)** | Azure AI Search |
-| **Vector DB** | Qdrant |
-| **PDF Parsing** | PdfPig |
-| **DOCX Parsing** | DocumentFormat.OpenXml |
+| **Document Parsing** | PdfPig, DocumentFormat.OpenXml |
 | **Database** | SQLite + Entity Framework Core |
-| **Logging** | Serilog (Console + File sinks, structured) |
+| **Logging** | Serilog (Console + File sinks) |
 | **Frontend** | Blazor WebAssembly (.NET 8) |
-| **Testing** | xUnit, Moq, FluentAssertions |
+| **Hosting** | Azure Container Apps + Azure Static Web Apps |
+| **CI/CD** | GitHub Actions → GHCR → Azure |
+| **Testing** | xUnit, Moq, FluentAssertions (236 tests) |
 | **API Docs** | Swagger / OpenAPI |
 
 ---
@@ -344,17 +279,17 @@ Qdrant__ApiKey=your-qdrant-cloud-key   # for Qdrant Cloud
 ```
 dotnet-rag-api/
 ├── src/
-│   ├── RagApi.Api/              # Web API (Controllers, DTOs)
-│   ├── RagApi.Application/      # Business logic, Service interfaces
+│   ├── RagApi.Api/              # Controllers, DTOs, Middleware
+│   ├── RagApi.Application/      # Interfaces, RagService, DocumentService
 │   ├── RagApi.BlazorUI/         # Blazor WebAssembly chat UI
 │   ├── RagApi.Domain/           # Core entities
-│   └── RagApi.Infrastructure/   # External services (Qdrant, Ollama, Azure)
+│   └── RagApi.Infrastructure/   # Qdrant, OpenAI, Azure, EF Core
 ├── tests/
-│   └── RagApi.Tests/            # Unit & integration tests
-├── docker-compose.yml           # Qdrant + Ollama containers
-├── Dockerfile                   # Production container build
-├── setup.sh / setup.bat         # Automated setup scripts
-└── RagApi.sln                   # Solution file
+│   └── RagApi.Tests/            # 236 unit tests
+├── .github/workflows/           # CI, Deploy API, Deploy UI
+├── docker-compose.yml           # Local Qdrant + Ollama
+├── Dockerfile                   # Production container image
+└── RagApi.sln
 ```
 
 ---
@@ -363,68 +298,23 @@ dotnet-rag-api/
 
 | Problem | Solution |
 |---------|----------|
-| **"Connection refused" to Ollama/Qdrant** | Make sure Docker Desktop is running: `docker ps` should show `rag-ollama` and `rag-qdrant` |
-| **"Collection not found" in Qdrant** | The collection auto-creates on first API startup. Restart the API. |
-| **First request is very slow** | Normal — Ollama loads the model into memory on first use. Subsequent requests are faster. |
-| **Out of memory errors** | Ollama models need ~4-8 GB RAM. Try a smaller model: change `ChatModel` to `llama3.2:1b` in `appsettings.json` |
-| **Port already in use** | Stop other services on port 5000, or change the port in `Properties/launchSettings.json` |
-
----
-
-## Roadmap
-
-### Phase 1: Foundation & Production Readiness ✅
-- [x] Global exception handling middleware
-- [x] Request/response logging
-- [x] Persistent document storage (SQLite + EF Core)
-- [x] Real health checks (Qdrant, Ollama, SQLite)
-- [x] Unit tests (xUnit + Moq + FluentAssertions)
-
-### Phase 2: Core Features ✅
-- [x] Streaming chat responses (SSE)
-- [x] Conversation memory with server-side sessions
-- [x] Document metadata & tag filtering
-
-### Phase 3: Search Improvements ✅
-- [x] Hybrid search (keyword + semantic)
-- [x] Search result re-ranking (MMR)
-- [x] Configurable chunking strategies (Fixed, Sentence, Paragraph)
-
-### Phase 4: Security & API Management ✅
-- [x] API key authentication
-- [x] Rate limiting
-- [x] Production CORS configuration
-- [x] Input validation (FluentValidation)
-
-### Phase 5: Advanced Features ✅
-- [x] Azure AI Search integration
-- [x] Batch document upload
-- [x] Document update & re-process
-- [x] Export conversation history
-
-### Phase 6: Frontend & DevOps ✅
-- [x] Structured logging (Serilog)
-- [x] GitHub Actions CI/CD
-- [x] Blazor WebAssembly chat UI
-- [x] Full Docker Compose (API + UI + services)
-
-### Phase 7: Azure Deployment with OpenAI Provider ✅
-- [x] OpenAI API provider (gpt-4o-mini + text-embedding-3-small) — no extra compute cost
-- [x] Qdrant Cloud API key support (for managed cloud cluster)
-- [x] GitHub Actions deploy workflow (GHCR → Azure Container Apps)
-- [x] 236 unit tests (15 new for OpenAI chat + embedding services)
+| **"Connection refused" to Ollama/Qdrant** | Run `docker ps` — both `rag-ollama` and `rag-qdrant` must be running |
+| **"Collection not found" in Qdrant** | Collection auto-creates on first startup. Restart the API. |
+| **First request is slow** | Ollama loads the model on first use (~10–30s). Subsequent requests are fast. |
+| **Out of memory** | Ollama needs ~4–8 GB RAM. Switch to `llama3.2:1b` in `appsettings.json`. |
+| **Port conflict** | Change the port in `src/RagApi.Api/Properties/launchSettings.json`. |
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome. Please open an issue before submitting a pull request for significant changes.
 
 ---
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE) for details.
 
 ---
 
@@ -437,4 +327,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-If you found this project helpful, please give it a star!
+If you found this project helpful, please consider giving it a star!
