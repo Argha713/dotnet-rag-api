@@ -1,0 +1,73 @@
+# Argha - 2026-03-01 - Deploy workflow: build API image → GHCR → Azure Container Apps (Phase 7)
+name: Deploy
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Cancel any in-progress deploy for the same branch when a new push arrives
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+# Workflow-level permissions — packages:write needed for GHCR push
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # ── Build & push API image to GHCR ───────────────────────────────────────────
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/dotnet-rag-api
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: src/RagApi.Api/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # ── Deploy API to Azure Container Apps ───────────────────────────────────────
+  deploy-api:
+    name: Deploy API to Azure Container Apps
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          # AZURE_CREDENTIALS: JSON from `az ad sp create-for-rbac --json-auth ...`
+          # Stored in GitHub → Settings → Secrets → Actions → AZURE_CREDENTIALS
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure Container Apps
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          resourceGroup: rg-rag-demo
+          containerAppName: rag-api
+          imageToDeploy: ghcr.io/${{ github.repository_owner }}/dotnet-rag-api:latest
