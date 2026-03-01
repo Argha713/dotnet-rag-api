@@ -126,15 +126,8 @@ Remember: Only use information from the context above. Do not make up informatio
     // Argha - 2026-02-19 - Added filterByTags parameter for metadata tag filtering 
     // Argha - 2026-02-20 - Added useHybridSearch parameter for hybrid search 
     // Argha - 2026-02-20 - Added useReRanking parameter for MMR re-ranking 
-    public async IAsyncEnumerable<StreamEvent> ChatStreamAsync(
-        string query,
-        List<ChatMessage>? conversationHistory = null,
-        int topK = 5,
-        Guid? filterByDocumentId = null,
-        List<string>? filterByTags = null,
-        bool? useHybridSearch = null,
-        bool? useReRanking = null,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<StreamEvent> ChatStreamAsync(string query, List<ChatMessage>? conversationHistory = null, int topK = 5, Guid? filterByDocumentId = null, List<string>? filterByTags = null, 
+        bool? useHybridSearch = null, bool? useReRanking = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Processing streaming RAG query: {Query}", query);
 
@@ -212,7 +205,7 @@ Remember: Only use information from the context above. Do not make up informatio
             cancellationToken);
     }
 
-    // Argha - 2026-02-20 - Unified retrieval entry point: semantic-only or hybrid + optional MMR re-ranking (Phase 3.1/3.2)
+    // Argha - 2026-02-20 - Unified retrieval entry point: semantic-only or hybrid + optional MMR re-ranking 
     private async Task<List<SearchResult>> RetrieveChunksAsync(
         string query,
         float[] queryEmbedding,
@@ -224,7 +217,7 @@ Remember: Only use information from the context above. Do not make up informatio
         CancellationToken cancellationToken)
     {
         // Argha - 2026-02-20 - Expand candidate count when hybrid (good fusion needs more candidates from each list)
-        //                     or when re-ranking (MMR needs more candidates to diversify from). (Phase 3.1/3.2)
+        //                     or when re-ranking (MMR needs more candidates to diversify from).
         var candidateCount = (useHybrid || useReRanking)
             ? topK * _searchOptions.CandidateMultiplier
             : topK;
@@ -311,7 +304,7 @@ Remember: Only use information from the context above. Do not make up informatio
     private static string BuildContext(List<SearchResult> results)
     {
         var contextBuilder = new System.Text.StringBuilder();
-        
+
         for (int i = 0; i < results.Count; i++)
         {
             var result = results[i];
@@ -327,7 +320,7 @@ Remember: Only use information from the context above. Do not make up informatio
     {
         if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
             return text;
-        
+
         return text.Substring(0, maxLength - 3) + "...";
     }
 }

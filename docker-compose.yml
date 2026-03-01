@@ -13,8 +13,15 @@ services:
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
     restart: unless-stopped
+    healthcheck:
+      # Argha - 2026-03-01 - readyz endpoint confirms Qdrant is fully ready (not just started)
+      test: ["CMD-SHELL", "curl -sf http://localhost:6333/readyz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
 
-  # Ollama (for local LLM)
+  # Ollama (for local LLM inference)
   ollama:
     image: ollama/ollama:latest
     container_name: rag-ollama
@@ -23,6 +30,7 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
+    # Argha - 2026-03-01 - no health check; model loading is slow and handled by service_started
     # GPU support (uncomment if you have NVIDIA GPU)
     # deploy:
     #   resources:
@@ -32,23 +40,52 @@ services:
     #           count: 1
     #           capabilities: [gpu]
 
-  # RAG API (optional - for containerized deployment)
-  # api:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   container_name: rag-api
-  #   ports:
-  #     - "5000:8080"
-  #   environment:
-  #     - ASPNETCORE_ENVIRONMENT=Production
-  #     - AI__Provider=Ollama
-  #     - AI__Ollama__BaseUrl=http://ollama:11434
-  #     - Qdrant__Host=qdrant
-  #   depends_on:
-  #     - qdrant
-  #     - ollama
-  #   restart: unless-stopped
+  # RAG API (.NET 8)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-api
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      # Argha - 2026-03-01 - AI provider wired to the ollama container by service name
+      - AI__Provider=Ollama
+      - AI__Ollama__BaseUrl=http://ollama:11434
+      - AI__Ollama__EmbeddingModel=nomic-embed-text
+      - AI__Ollama__ChatModel=llama3.2
+      - AI__Ollama__EmbeddingDimension=768
+      # Argha - 2026-03-01 - Qdrant wired to the qdrant container by service name (gRPC port)
+      - Qdrant__Host=qdrant
+      - Qdrant__Port=6334
+      - Qdrant__UseTls=false
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      # Argha - 2026-03-01 - health endpoint is always public (no API key required)
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/system/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  # Blazor WebAssembly UI (served via nginx)
+  blazor-ui:
+    build:
+      context: .
+      dockerfile: src/RagApi.BlazorUI/Dockerfile
+    container_name: rag-blazor-ui
+    ports:
+      - "5001:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   qdrant_data:

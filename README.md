@@ -378,7 +378,7 @@ dotnet-rag-api/
 - [x] Structured logging (Serilog)
 - [x] GitHub Actions CI/CD
 - [x] Blazor WebAssembly chat UI
-- [ ] Full Docker Compose (API + UI + services)
+- [x] Full Docker Compose (API + UI + services)
 
 ---
 

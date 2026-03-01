@@ -25,6 +25,14 @@ WORKDIR /app
 
 # Create non-root user for security
 RUN adduser --disabled-password --gecos '' appuser
+
+# Argha - 2026-03-01 - install curl; required by HEALTHCHECK (not in aspnet base image)
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Argha - 2026-03-01 - grant appuser write access to /app so SQLite can create ragapi.db at runtime
+RUN chown appuser:appuser /app
+
 USER appuser
 
 COPY --from=build /app/publish .

@@ -1,0 +1,10 @@
+# Argha - 2026-03-01 - exclude build artifacts and non-essential files from Docker build context
+bin/
+obj/
+.vs/
+tests/
+logs/
+.git/
+.gitignore
+*.md
+.claude/
