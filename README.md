@@ -265,12 +265,12 @@ Cors__AllowedOrigins__0=https://your-frontend.azurestaticapps.net
 | **Vector DB** | Qdrant (local or cloud) |
 | **Vector DB (Cloud)** | Azure AI Search |
 | **Document Parsing** | PdfPig, DocumentFormat.OpenXml |
-| **Database** | SQLite + Entity Framework Core |
+| **Database** | PostgreSQL (Neon) + Entity Framework Core |
 | **Logging** | Serilog (Console + File sinks) |
 | **Frontend** | Blazor WebAssembly (.NET 8) |
 | **Hosting** | Azure Container Apps + Azure Static Web Apps |
 | **CI/CD** | GitHub Actions → GHCR → Azure |
-| **Testing** | xUnit, Moq, FluentAssertions (236 tests) |
+| **Testing** | xUnit, Moq, FluentAssertions (244 tests) |
 | **API Docs** | Swagger / OpenAPI |
 
 ---
@@ -286,9 +286,9 @@ dotnet-rag-api/
 │   ├── RagApi.Domain/           # Core entities
 │   └── RagApi.Infrastructure/   # Qdrant, OpenAI, Azure, EF Core
 ├── tests/
-│   └── RagApi.Tests/            # 236 unit tests
+│   └── RagApi.Tests/            # 244 unit tests
 ├── .github/workflows/           # CI, Deploy API, Deploy UI
-├── docker-compose.yml           # Local Qdrant + Ollama
+├── docker-compose.yml           # Local Qdrant + Ollama + PostgreSQL
 ├── Dockerfile                   # Production container image
 └── RagApi.sln
 ```
@@ -300,7 +300,7 @@ dotnet-rag-api/
 | Problem | Solution |
 |---------|----------|
 | **"Connection refused" to Ollama/Qdrant** | Run `docker ps` — both `rag-ollama` and `rag-qdrant` must be running |
-| **"Collection not found" in Qdrant** | Collection auto-creates on first startup. Restart the API. |
+| **"Collection not found" in Qdrant** | The API auto-reinitializes the collection and retries — no restart needed. |
 | **First request is slow** | Ollama loads the model on first use (~10–30s). Subsequent requests are fast. |
 | **Out of memory** | Ollama needs ~4–8 GB RAM. Switch to `llama3.2:1b` in `appsettings.json`. |
 | **Port conflict** | Change the port in `src/RagApi.Api/Properties/launchSettings.json`. |
