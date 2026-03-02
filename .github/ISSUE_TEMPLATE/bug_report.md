@@ -2,6 +2,7 @@
 name: Bug Report
 about: Production bug or unexpected behaviour
 labels: bug
+assignees: Argha713
 ---
 
 ## Summary
