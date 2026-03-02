@@ -51,6 +51,22 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      # Argha - 2026-03-02 - #8 - Inject Neon Postgres connection string as Container App secret; idempotent
+      - name: Set PostgreSQL connection string secret on Container App
+        run: |
+          az containerapp secret set \
+            --name rag-api \
+            --resource-group rg-rag-demo \
+            --secrets "pg-connection-string=${{ secrets.POSTGRES_CONNECTION_STRING }}"
+
+      # Argha - 2026-03-02 - #8 - Wire secret to env var; safe to re-run on every deploy
+      - name: Wire PostgreSQL secret as environment variable
+        run: |
+          az containerapp update \
+            --name rag-api \
+            --resource-group rg-rag-demo \
+            --set-env-vars "ConnectionStrings__DefaultConnection=secretref:pg-connection-string"
+
       - name: Deploy to Azure Container Apps
         uses: azure/container-apps-deploy-action@v2
         with:

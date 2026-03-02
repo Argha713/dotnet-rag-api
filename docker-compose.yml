@@ -40,6 +40,28 @@ services:
     #           count: 1
     #           capabilities: [gpu]
 
+  # PostgreSQL — persistent relational storage (replaces ephemeral SQLite)
+  postgres:
+    image: postgres:16-alpine
+    container_name: rag-postgres
+    environment:
+      # Argha - 2026-03-02 - #7 - Local dev credentials only; never commit production values
+      POSTGRES_DB: ragapi
+      POSTGRES_USER: ragapi
+      POSTGRES_PASSWORD: changeme
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      # Argha - 2026-03-02 - #7 - pg_isready confirms DB accepts connections before dependants start
+      test: ["CMD-SHELL", "pg_isready -U ragapi -d ragapi"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
   # RAG API (.NET 8)
   api:
     build:
@@ -60,7 +82,11 @@ services:
       - Qdrant__Host=qdrant
       - Qdrant__Port=6334
       - Qdrant__UseTls=false
+      # Argha - 2026-03-02 - #7 - PostgreSQL wired to postgres container by service name
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=ragapi;Username=ragapi;Password=changeme
     depends_on:
+      postgres:
+        condition: service_healthy
       qdrant:
         condition: service_healthy
       ollama:
@@ -90,3 +116,4 @@ services:
 volumes:
   qdrant_data:
   ollama_data:
+  postgres_data:  # Argha - 2026-03-02 - #7 - Persistent PostgreSQL storage survives container restarts

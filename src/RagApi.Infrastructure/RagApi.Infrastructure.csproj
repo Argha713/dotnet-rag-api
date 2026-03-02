@@ -14,9 +14,14 @@
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.0.2" />
     <PackageReference Include="PdfPig" Version="0.1.9" />
     <PackageReference Include="System.Text.Json" Version="8.0.4" />
-    <!-- Argha - 2026-02-15 - Added for persistent document storage  -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.8" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.8" />
+    <!-- Argha - 2026-03-02 - #6 - disabled: replaced by Npgsql.EntityFrameworkCore.PostgreSQL (Phase 8)
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.8" /> -->
+    <!-- Argha - 2026-03-02 - #6 - PostgreSQL provider for persistent cross-deployment storage -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.8">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <!-- Argha - 2026-02-15 - Added for real health checks  -->
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="8.0.8" />
     <!-- Argha - 2026-02-21 - Azure AI Search vector store provider  -->
@@ -25,6 +30,17 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RagApi.Application\RagApi.Application.csproj" />
+  </ItemGroup>
+
+  <!-- Argha - 2026-03-02 - #5 - Allow test project to access internal IQdrantClient constructor on QdrantVectorStore -->
+  <!-- DynamicProxyGenAssembly2 is Castle's proxy assembly; Moq needs it to mock internal interfaces -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>RagApi.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>DynamicProxyGenAssembly2</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 
 </Project>

@@ -8,7 +8,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 [![Deploy](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml/badge.svg)](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat&logo=dotnet)
 ![C#](https://img.shields.io/badge/C%23-12-239120?style=flat&logo=csharp)
-![Tests](https://img.shields.io/badge/tests-236%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-244%20passing-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ---
@@ -55,16 +55,17 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 - **Input validation** — FluentValidation with structured error responses
 - **Global error handling** — Exception middleware with JSON error responses
 - **Structured logging** — Serilog with rolling daily files, per-request correlation IDs (`X-Correlation-ID`)
-- **Real health checks** — Per-dependency status for Qdrant, Ollama/OpenAI, and SQLite
+- **Real health checks** — Per-dependency status for Qdrant, Ollama/OpenAI, and PostgreSQL
+- **Qdrant auto-reinitialize** — Recovers automatically if the collection is deleted externally; retries once without downtime
 
 ### Infrastructure
 - **Clean Architecture** — Domain → Application → Infrastructure → API
 - **Dual vector store** — Qdrant (local or cloud) or Azure AI Search
-- **SQLite + EF Core** — Persistent document metadata; no migrations required
-- **Docker Compose** — One command to spin up all local dependencies
+- **PostgreSQL + EF Core migrations** — Persistent document metadata survives container restarts; Neon free tier in production
+- **Docker Compose** — One command to spin up all local dependencies (API + UI + Qdrant + Ollama + PostgreSQL)
 - **GitHub Actions CI/CD** — Automated test, build, and deploy pipeline
 - **Azure deployment** — Container Apps (scales to zero) + Static Web Apps (free tier)
-- **236 unit tests** — xUnit + Moq + FluentAssertions across all layers
+- **244 unit tests** — xUnit + Moq + FluentAssertions across all layers
 
 ---
 

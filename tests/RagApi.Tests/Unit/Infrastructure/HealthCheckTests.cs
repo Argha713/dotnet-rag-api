@@ -79,42 +79,31 @@ public class HealthCheckTests
         result.Description.Should().Contain("Ollama unreachable");
     }
 
-    [Fact]
-    public async Task SqliteHealthCheck_CanConnect_ReturnsHealthy()
-    {
-        // Arrange
-        var options = new DbContextOptionsBuilder<RagApiDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
+    // Argha - 2026-03-02 - #6 - disabled: SqliteHealthCheck replaced by PostgresHealthCheck (Phase 8)
+    // Tests for PostgresHealthCheck are in Phase8Tests.cs
+    // [Fact]
+    // public async Task SqliteHealthCheck_CanConnect_ReturnsHealthy()
+    // {
+    //     var options = new DbContextOptionsBuilder<RagApiDbContext>()
+    //         .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+    //         .Options;
+    //     using var dbContext = new RagApiDbContext(options);
+    //     var healthCheck = new SqliteHealthCheck(dbContext, Mock.Of<ILogger<SqliteHealthCheck>>());
+    //     var result = await healthCheck.CheckHealthAsync(new HealthCheckContext());
+    //     result.Status.Should().Be(HealthStatus.Healthy);
+    //     result.Description.Should().Contain("SQLite database reachable");
+    // }
 
-        using var dbContext = new RagApiDbContext(options);
-        var healthCheck = new SqliteHealthCheck(dbContext, Mock.Of<ILogger<SqliteHealthCheck>>());
-
-        // Act
-        var result = await healthCheck.CheckHealthAsync(new HealthCheckContext());
-
-        // Assert
-        result.Status.Should().Be(HealthStatus.Healthy);
-        result.Description.Should().Contain("SQLite database reachable");
-    }
-
-    [Fact]
-    public async Task SqliteHealthCheck_CannotConnect_ReturnsUnhealthy()
-    {
-        // Arrange
-        var options = new DbContextOptionsBuilder<RagApiDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        var dbContext = new RagApiDbContext(options);
-        dbContext.Dispose(); // Argha - 2026-02-15 - Force disposal so CanConnectAsync fails
-
-        var healthCheck = new SqliteHealthCheck(dbContext, Mock.Of<ILogger<SqliteHealthCheck>>());
-
-        // Act
-        var result = await healthCheck.CheckHealthAsync(new HealthCheckContext());
-
-        // Assert
-        result.Status.Should().Be(HealthStatus.Unhealthy);
-    }
+    // [Fact]
+    // public async Task SqliteHealthCheck_CannotConnect_ReturnsUnhealthy()
+    // {
+    //     var options = new DbContextOptionsBuilder<RagApiDbContext>()
+    //         .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+    //         .Options;
+    //     var dbContext = new RagApiDbContext(options);
+    //     dbContext.Dispose();
+    //     var healthCheck = new SqliteHealthCheck(dbContext, Mock.Of<ILogger<SqliteHealthCheck>>());
+    //     var result = await healthCheck.CheckHealthAsync(new HealthCheckContext());
+    //     result.Status.Should().Be(HealthStatus.Unhealthy);
+    // }
 }

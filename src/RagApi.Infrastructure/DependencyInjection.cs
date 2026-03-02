@@ -79,9 +79,12 @@ public static class DependencyInjection
         // Register document processor
         services.AddSingleton<IDocumentProcessor, DocumentProcessor>();
 
-        // Argha - 2026-02-15 - SQLite persistent document storage 
-        var connectionString = configuration.GetConnectionString("DefaultConnection") ?? "Data Source=ragapi.db";
-        services.AddDbContext<RagApiDbContext>(options => options.UseSqlite(connectionString));
+        // Argha - 2026-03-02 - #6 - PostgreSQL replaces SQLite for persistent cross-deployment storage
+        // EnableLegacyTimestampBehavior treats all DateTime as timestamp without time zone (no UTC conversion)
+        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+        var connectionString = configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required");
+        services.AddDbContext<RagApiDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IDocumentRepository, DocumentRepository>();
 
         // Argha - 2026-02-19 - Conversation session repository and service 
@@ -94,9 +97,9 @@ public static class DependencyInjection
         // Argha - 2026-02-21 - Conversation export service registered
         services.AddScoped<ConversationExportService>();
 
-        // Argha - 2026-02-15 - Real health checks for all dependencies 
+        // Argha - 2026-03-02 - #6 - PostgreSQL health check replaces SqliteHealthCheck
         var healthChecks = services.AddHealthChecks()
-            .AddCheck<SqliteHealthCheck>("sqlite", tags: ["dependency"]);
+            .AddCheck<PostgresHealthCheck>("postgres", tags: ["dependency"]);
 
         // Argha - 2026-02-21 - Register vector store health check based on active provider 
         if (vectorStoreConfig.Provider.Equals("AzureAiSearch", StringComparison.OrdinalIgnoreCase))

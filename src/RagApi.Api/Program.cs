@@ -143,72 +143,9 @@ using (var scope = app.Services.CreateScope())
     var vectorStore = scope.ServiceProvider.GetRequiredService<IVectorStore>();
     await vectorStore.InitializeAsync();
 
-    // Argha - 2026-02-15 - Create SQLite database if it doesn't exist
+    // Argha - 2026-03-02 - #6 - Apply pending EF Core migrations on startup; idempotent on repeat runs
     var dbContext = scope.ServiceProvider.GetRequiredService<RagApiDbContext>();
-
-    // Argha - 2026-03-02 - Retry SQLite init to handle Azure Files SMB lock latency on container restart.
-    // Azure Files uses SMB which may not release file locks immediately when a container revision exits,
-    // causing the new revision to hit SQLite Error 5 (SQLITE_BUSY) on startup. Retry with backoff.
-    var sqliteMaxRetries = 5;
-    var sqliteRetryDelay = TimeSpan.FromSeconds(2);
-    for (var attempt = 1; attempt <= sqliteMaxRetries; attempt++)
-    {
-        try
-        {
-            // Argha - 2026-03-02 - Pre-create the SQLite file with DELETE journal mode before EF Core initializes.
-            // EF Core's Create() issues 'PRAGMA journal_mode = wal' for new databases, which hangs on
-            // Azure Files SMB (POSIX mmap not supported). Pre-creating the file makes Exists() return true,
-            // so EnsureCreatedAsync skips Create() and goes straight to CreateTablesAsync() — no WAL pragma.
-            await using (var preConn = new Microsoft.Data.Sqlite.SqliteConnection(dbContext.Database.GetConnectionString()))
-            {
-                await preConn.OpenAsync();
-                await using var preCmd = preConn.CreateCommand();
-                preCmd.CommandText = "PRAGMA journal_mode=DELETE;";
-                await preCmd.ExecuteScalarAsync();
-            }
-
-            await dbContext.Database.EnsureCreatedAsync();
-
-            // Argha - 2026-02-19 - Create ConversationSessions table on existing DBs
-            // EnsureCreatedAsync only creates new DBs; this handles schema evolution without migrations
-            await dbContext.Database.ExecuteSqlRawAsync(@"
-                CREATE TABLE IF NOT EXISTS ConversationSessions (
-                    Id TEXT NOT NULL PRIMARY KEY,
-                    CreatedAt TEXT NOT NULL,
-                    LastMessageAt TEXT NOT NULL,
-                    Title TEXT NULL,
-                    MessagesJson TEXT NOT NULL
-                )
-            ");
-
-            // Argha - 2026-02-19 - Add TagsJson column to existing Documents tables
-            // SQLite does not support DROP COLUMN; catch and ignore if column already exists
-            try
-            {
-                await dbContext.Database.ExecuteSqlRawAsync(
-                    "ALTER TABLE Documents ADD COLUMN TagsJson TEXT NOT NULL DEFAULT '[]'");
-            }
-            catch { /* Column already exists — safe to ignore */ }
-
-            // Argha - 2026-02-21 - Add UpdatedAt column to existing Documents tables
-            try
-            {
-                await dbContext.Database.ExecuteSqlRawAsync(
-                    "ALTER TABLE Documents ADD COLUMN UpdatedAt TEXT NULL");
-            }
-            catch { /* Column already exists — safe to ignore */ }
-
-            break; // SQLite init succeeded — exit retry loop
-        }
-        catch (Microsoft.Data.Sqlite.SqliteException ex) when ((ex.SqliteErrorCode == 5 || ex.SqliteErrorCode == 6) && attempt < sqliteMaxRetries)
-        {
-            // Argha - 2026-03-02 - Error 5 = SQLITE_BUSY, Error 6 = SQLITE_LOCKED; backoff: 2s, 4s, 8s, 16s
-            Log.Warning("SQLite locked on startup (attempt {Attempt}/{Max}), retrying in {Delay}s — Azure Files SMB lock not yet released",
-                attempt, sqliteMaxRetries, sqliteRetryDelay.TotalSeconds);
-            await Task.Delay(sqliteRetryDelay);
-            sqliteRetryDelay = TimeSpan.FromSeconds(sqliteRetryDelay.TotalSeconds * 2);
-        }
-    }
+    await dbContext.Database.MigrateAsync();
 }
 
 // Argha - 2026-02-15 - Global exception handling — must be first in pipeline
