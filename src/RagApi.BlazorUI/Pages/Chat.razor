@@ -1,4 +1,5 @@
-@* Argha - 2026-02-21 - Main chat page: sidebar with conversation list + streaming message panel  *@
+@* Argha - 2026-03-03 - #13 - Chat page redesign: modern sidebar, indigo bubbles, improved input & sources *@
+@* Argha - 2026-02-21 - Original chat page: sidebar with conversation list + streaming message panel *@
 @page "/"
 @inject ChatApiService ChatService
 @inject ConversationApiService ConversationService
@@ -9,10 +10,14 @@
 
 <div class="chat-layout">
 
-    @* ---- Left sidebar: conversation list ---- *@
+    @* ── Left sidebar: conversation list ── *@
     <div class="chat-sidebar">
-        <button class="btn btn-primary w-100 mb-3" @onclick="CreateNewConversationAsync" disabled="@_isStreaming">
-            + New Chat
+
+        <button class="btn-primary-modern w-100" @onclick="CreateNewConversationAsync" disabled="@_isStreaming">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            New Conversation
         </button>
 
         <div class="conv-list">
@@ -24,27 +29,51 @@
                         <div class="conv-title" title="@conv.Title">@(conv.Title ?? "New chat")</div>
                         <div class="conv-date">@conv.CreatedAt.ToString("MMM d")</div>
                     </div>
-                    <button class="btn btn-sm btn-outline-danger conv-delete"
+                    <button class="btn-icon btn-icon-danger conv-delete"
                             @onclick:stopPropagation="true"
-                            @onclick="() => DeleteConversationAsync(conv.Id)">&#215;</button>
+                            @onclick="() => DeleteConversationAsync(conv.Id)"
+                            title="Delete">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
                 </div>
             }
 
             @if (_conversations.Count == 0)
             {
-                <p class="text-muted small text-center mt-3">No conversations yet.</p>
+                <div class="empty-state" style="padding: var(--space-8) var(--space-4);">
+                    <div class="empty-state-icon" style="width:48px;height:48px;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                    </div>
+                    <p style="font-size:var(--text-xs);color:var(--text-muted);text-align:center;margin:0;">No conversations yet</p>
+                </div>
             }
         </div>
     </div>
 
-    @* ---- Right panel: messages + input ---- *@
+    @* ── Right panel: messages + input ── *@
     <div class="chat-panel">
         @if (_activeConvId == Guid.Empty)
         {
             <div class="chat-empty">
-                <div style="font-size:3rem;">&#x1F916;</div>
-                <h4>Welcome to RAG Chat</h4>
-                <p class="text-muted">Click <strong>+ New Chat</strong> to start a conversation.</p>
+                <div class="empty-state">
+                    <div class="empty-state-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                    </div>
+                    <h3>Welcome to RAG Chat</h3>
+                    <p>Ask questions about your uploaded documents. Start a new conversation to begin.</p>
+                    <button class="btn-primary-modern" @onclick="CreateNewConversationAsync">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        Start chatting
+                    </button>
+                </div>
             </div>
         }
         else
@@ -54,26 +83,38 @@
                 {
                     <div class="message @msg.Role">
                         <div class="bubble">
-                            @if (msg.IsStreaming)
+                            @if (msg.IsStreaming && string.IsNullOrEmpty(msg.Content))
                             {
-                                @msg.Content<span class="typing-cursor">&#x25AE;</span>
+                                <div class="typing-dots">
+                                    <span></span><span></span><span></span>
+                                </div>
                             }
                             else
                             {
                                 @msg.Content
+                                @if (msg.IsStreaming)
+                                {
+                                    <span style="display:inline-block;width:2px;height:1em;background:var(--primary-mid);margin-left:2px;vertical-align:text-bottom;animation:dot-bounce 0.8s ease-in-out infinite;"></span>
+                                }
                             }
                         </div>
 
                         @if (msg.Sources?.Count > 0)
                         {
                             <details class="sources-panel">
-                                <summary>&#x1F4C4; @msg.Sources.Count source(s)</summary>
+                                <summary class="sources-toggle">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                        <polyline points="14 2 14 8 20 8"/>
+                                    </svg>
+                                    @msg.Sources.Count source@(msg.Sources.Count == 1 ? "" : "s") used
+                                </summary>
                                 @foreach (var src in msg.Sources)
                                 {
                                     <div class="source-item">
                                         <div class="source-header">
-                                            <strong>@src.FileName</strong>
-                                            <span class="badge bg-secondary">@src.RelevanceScore.ToString("F2")</span>
+                                            <span class="source-filename">@src.FileName</span>
+                                            <span class="source-score">@src.RelevanceScore.ToString("P0")</span>
                                         </div>
                                         <p class="source-text">@src.RelevantText</p>
                                     </div>
@@ -83,11 +124,13 @@
                     </div>
                 }
 
-                @* Placeholder bubble shown before first token arrives *@
+                @* Placeholder shown before first token *@
                 @if (_isStreaming && !_messages.Any(m => m.IsStreaming))
                 {
                     <div class="message assistant">
-                        <div class="bubble"><span class="typing-cursor">&#x25AE;</span></div>
+                        <div class="bubble">
+                            <div class="typing-dots"><span></span><span></span><span></span></div>
+                        </div>
                     </div>
                 }
             </div>
@@ -95,43 +138,50 @@
             <div class="input-area">
                 @if (!string.IsNullOrEmpty(_errorMessage))
                 {
-                    <div class="alert alert-danger py-1 px-2 mb-2 small">@_errorMessage</div>
+                    <div class="alert-modern alert-danger mb-3">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;">
+                            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                        @_errorMessage
+                    </div>
                 }
-                <div class="input-group">
-                    <textarea class="form-control"
-                              @bind="_inputText"
+                <div class="input-area-inner">
+                    <textarea @bind="_inputText"
                               @bind:event="oninput"
                               @onkeydown="HandleKeyDownAsync"
-                              placeholder="Ask a question about your documents..."
+                              placeholder="Ask a question about your documents…"
                               rows="2"
                               disabled="@_isStreaming"></textarea>
-                    <button class="btn btn-primary" @onclick="SendMessageAsync"
-                            disabled="@(_isStreaming || string.IsNullOrWhiteSpace(_inputText))">
+                    <button class="send-btn" @onclick="SendMessageAsync"
+                            disabled="@(_isStreaming || string.IsNullOrWhiteSpace(_inputText))"
+                            title="Send (Ctrl+Enter)">
                         @if (_isStreaming)
                         {
-                            <span class="spinner-border spinner-border-sm" role="status"></span>
+                            <div class="spinner-sm"></div>
                         }
                         else
                         {
-                            <span>Send</span>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                            </svg>
                         }
                     </button>
                 </div>
-                <small class="text-muted">Ctrl+Enter to send</small>
+                <p class="input-hint">Ctrl+Enter to send</p>
             </div>
         }
     </div>
 </div>
 
 @code {
-    // ---- Conversation list (IDs persisted in localStorage) ----
+    // ── Conversation list (IDs persisted in localStorage) ──
     private List<StoredConversation> _conversations = new();
     private Guid _activeConvId = Guid.Empty;
 
-    // ---- Messages for active conversation ----
+    // ── Messages for active conversation ──
     private List<UiMessage> _messages = new();
 
-    // ---- Input / streaming state ----
+    // ── Input / streaming state ──
     private string _inputText = string.Empty;
     private bool _isStreaming = false;
     private string _errorMessage = string.Empty;
@@ -286,7 +336,7 @@
         await ValueTask.CompletedTask;
     }
 
-    // ---- Inner types (UI-only, not persisted to API) ----
+    // ── Inner types (UI-only, not persisted to API) ──
 
     private class StoredConversation
     {
