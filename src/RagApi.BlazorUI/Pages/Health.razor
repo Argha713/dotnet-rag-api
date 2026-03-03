@@ -1,4 +1,5 @@
-@* Argha - 2026-02-21 - System health page: per-dependency status cards + 30 s auto-refresh  *@
+@* Argha - 2026-03-03 - #15 - Health page redesign: glassmorphism status banner, pulse-dot dependency cards *@
+@* Argha - 2026-02-21 - Original health page: per-dependency status cards + 30 s auto-refresh *@
 @page "/health"
 @inject HttpClient Http
 @implements IAsyncDisposable
@@ -6,68 +7,100 @@
 <PageTitle>Health — RAG Chat</PageTitle>
 
 <div class="page-body-scroll">
-<div class="container-fluid py-3">
+<div style="max-width:900px;margin:0 auto;padding:var(--space-6) var(--space-4);">
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="mb-0">System Health</h2>
-        <div class="d-flex align-items-center gap-3">
-            <small class="text-muted">
+    @* ── Page header ── *@
+    <div class="section-header">
+        <div>
+            <h1 class="section-title">System Health</h1>
+            <p class="section-subtitle">
                 @if (_lastChecked.HasValue)
                 {
-                    <span>Last checked: @_lastChecked.Value.ToString("HH:mm:ss")</span>
+                    <span>Last checked at @_lastChecked.Value.ToString("HH:mm:ss") · Auto-refreshes every 30 s</span>
                 }
-            </small>
-            <button class="btn btn-sm btn-outline-secondary" @onclick="CheckHealthAsync" disabled="@_isLoading">
-                &#x21BB; Refresh
-            </button>
+                else
+                {
+                    <span>Checking…</span>
+                }
+            </p>
         </div>
+        <button class="btn-ghost" @onclick="CheckHealthAsync" disabled="@_isLoading">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="@(_isLoading ? "animation:spin 0.8s linear infinite;" : "")">
+                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            Refresh
+        </button>
     </div>
 
+    @* ── Loading state ── *@
     @if (_isLoading && _report == null)
     {
-        <div class="text-center py-5">
-            <div class="spinner-border" role="status"></div>
-            <p class="mt-2 text-muted">Checking health…</p>
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:var(--space-12) 0;gap:var(--space-3);">
+            <div class="spinner-sm spinner-dark" style="width:28px;height:28px;border-width:3px;"></div>
+            <p style="font-size:var(--text-sm);color:var(--text-muted);margin:0;">Checking health…</p>
         </div>
     }
     else if (_errorMessage != null)
     {
-        <div class="alert alert-danger">
-            <strong>Could not reach API:</strong> @_errorMessage
-            <div class="mt-1 small">Make sure the API is running at the configured <code>ApiBaseUrl</code>.</div>
+        <div class="alert-modern alert-danger">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <div>
+                <strong>Could not reach API</strong> — @_errorMessage
+                <div style="font-size:var(--text-xs);margin-top:2px;opacity:0.8;">Make sure the API is running at the configured ApiBaseUrl.</div>
+            </div>
         </div>
     }
     else if (_report != null)
     {
-        @* Overall status banner *@
-        <div class="alert @GetAlertClass(_report.Status) d-flex align-items-center gap-2 mb-4">
-            <span style="font-size:1.3rem;">@GetStatusEmoji(_report.Status)</span>
-            <div>
-                <strong>Overall: @_report.Status</strong>
-                <span class="ms-2 fw-normal small">(@_report.TotalDuration)</span>
+        @* ── Glassmorphism status banner ── *@
+        <div class="health-banner @GetBannerClass(_report.Status)" style="margin-bottom:var(--space-6);">
+            <div class="health-banner-icon">
+                @if (_report.Status == "Healthy")   { <span>&#x2705;</span> }
+                else if (_report.Status == "Degraded") { <span>&#x26A0;&#xFE0F;</span> }
+                else                               { <span>&#x274C;</span> }
+            </div>
+            <div class="health-banner-content">
+                <p class="health-banner-status">@_report.Status</p>
+                <p class="health-banner-meta">
+                    @_report.Checks.Count(c => c.Status == "Healthy") of @_report.Checks.Count checks passing
+                    &nbsp;·&nbsp; @_report.TotalDuration
+                </p>
+            </div>
+            <div class="health-banner-actions">
+                <span style="font-size:var(--text-xs);color:var(--text-secondary);">@_report.Timestamp.ToString("MMM d, HH:mm")</span>
             </div>
         </div>
 
-        @* Per-dependency cards *@
+        @* ── Dependency cards ── *@
         <div class="row g-3">
             @foreach (var check in _report.Checks)
             {
                 <div class="col-md-4 col-sm-6">
-                    <div class="card h-100 health-card border-@GetBorderColor(check.Status)">
-                        <div class="card-header bg-@GetBgColor(check.Status) text-white d-flex justify-content-between align-items-center">
-                            <strong>@check.Name.ToUpperInvariant()</strong>
-                            <span class="badge bg-white text-dark">@check.Status</span>
-                        </div>
-                        <div class="card-body">
-                            @if (!string.IsNullOrEmpty(check.Description))
-                            {
-                                <p class="mb-2 small">@check.Description</p>
-                            }
-                            <small class="text-muted">&#x23F1; @check.Duration</small>
-                            @if (!string.IsNullOrEmpty(check.Error))
-                            {
-                                <div class="alert alert-danger mt-2 py-1 px-2 mb-0 small">@check.Error</div>
-                            }
+                    <div class="health-dep-card">
+                        <div class="health-dep-card-accent @check.Status.ToLower()">
+                            <div class="health-dep-header">
+                                <span class="health-dep-name">@check.Name</span>
+                                <span class="status-badge @GetStatusClass(check.Status)">@check.Status</span>
+                            </div>
+                            <div class="health-dep-body">
+                                @if (!string.IsNullOrEmpty(check.Description))
+                                {
+                                    <p class="health-dep-desc">@check.Description</p>
+                                }
+                                <p class="health-dep-latency">
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-right:3px;vertical-align:middle;">
+                                        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                                    </svg>
+                                    @check.Duration
+                                </p>
+                                @if (!string.IsNullOrEmpty(check.Error))
+                                {
+                                    <div class="health-dep-error">@check.Error</div>
+                                }
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -120,32 +153,18 @@
         }
     }
 
-    private static string GetAlertClass(string status) => status switch
+    private static string GetBannerClass(string status) => status switch
     {
-        "Healthy"  => "alert-success",
-        "Degraded" => "alert-warning",
-        _          => "alert-danger"
+        "Healthy"  => "healthy",
+        "Degraded" => "degraded",
+        _          => "unhealthy"
     };
 
-    private static string GetBorderColor(string status) => status switch
+    private static string GetStatusClass(string status) => status switch
     {
-        "Healthy"  => "success",
-        "Degraded" => "warning",
-        _          => "danger"
-    };
-
-    private static string GetBgColor(string status) => status switch
-    {
-        "Healthy"  => "success",
-        "Degraded" => "warning",
-        _          => "danger"
-    };
-
-    private static string GetStatusEmoji(string status) => status switch
-    {
-        "Healthy"  => "&#x2705;",
-        "Degraded" => "&#x26A0;&#xFE0F;",
-        _          => "&#x274C;"
+        "Healthy"  => "status-success",
+        "Degraded" => "status-warning",
+        _          => "status-danger"
     };
 
     public ValueTask DisposeAsync()
@@ -155,7 +174,7 @@
         return ValueTask.CompletedTask;
     }
 
-    // ---- Inner types ----
+    // ── Inner types ──
 
     private class HealthReport
     {

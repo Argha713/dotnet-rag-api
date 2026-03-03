@@ -1,150 +1,241 @@
-@* Argha - 2026-02-21 - Document management page: upload, list, delete, filter by tag  *@
+@* Argha - 2026-03-03 - #14 - Documents page redesign: drag-drop zone, card grid, status dots, tag chips *@
+@* Argha - 2026-02-21 - Original documents page: upload card + table listing *@
 @page "/documents"
 @inject DocumentApiService DocumentService
 
 <PageTitle>Documents — RAG Chat</PageTitle>
 
 <div class="page-body-scroll">
-<div class="container-fluid py-3">
+<div style="max-width:1100px;margin:0 auto;padding:var(--space-6) var(--space-4);">
 
-    <h2 class="mb-3">Documents</h2>
-
-    @* ---- Upload card ---- *@
-    <div class="card mb-4">
-        <div class="card-header fw-semibold">Upload Document</div>
-        <div class="card-body">
-            <div class="row g-2 align-items-end">
-                <div class="col-md-5">
-                    <label class="form-label small text-muted">File (PDF, DOCX, TXT, MD)</label>
-                    <InputFile OnChange="OnFileSelected"
-                               accept=".pdf,.docx,.txt,.md"
-                               class="form-control" />
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label small text-muted">Tags (comma-separated)</label>
-                    <input type="text" class="form-control" placeholder="e.g. finance, q3"
-                           @bind="_tagsInput" @bind:event="oninput" />
-                </div>
-                <div class="col-md-3">
-                    <button class="btn btn-primary w-100"
-                            @onclick="UploadAsync"
-                            disabled="@(_selectedFile == null || _isUploading)">
-                        @if (_isUploading)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                            <span>Uploading…</span>
-                        }
-                        else
-                        {
-                            <span>&#x2B06; Upload</span>
-                        }
-                    </button>
-                </div>
-            </div>
-
-            @if (!string.IsNullOrEmpty(_uploadMessage))
-            {
-                <div class="alert @(_uploadSuccess ? "alert-success" : "alert-danger") mt-2 py-2 mb-0 small">
-                    @_uploadMessage
-                </div>
-            }
+    @* ── Page header ── *@
+    <div class="section-header">
+        <div>
+            <h1 class="section-title">Documents</h1>
+            <p class="section-subtitle">Upload and manage your knowledge base</p>
         </div>
+        <button class="btn-ghost" @onclick="() => LoadDocumentsAsync(null)" title="Refresh list">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            Refresh
+        </button>
     </div>
 
-    @* ---- Documents table ---- *@
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <span class="fw-semibold">Uploaded Documents (@_documents.Count)</span>
-            <div class="d-flex gap-2">
-                <input type="text" class="form-control form-control-sm" style="width:180px"
-                       placeholder="Filter by tag…"
-                       @bind="_tagFilter" @bind:event="oninput" />
-                <button class="btn btn-sm btn-outline-secondary" @onclick="ApplyFilterAsync">Filter</button>
-                <button class="btn btn-sm btn-outline-secondary" @onclick="() => LoadDocumentsAsync(null)">&#x21BB; All</button>
+    @* ── Upload zone ── *@
+    <div class="card-modern mb-6" style="margin-bottom:var(--space-6);">
+        <div class="upload-zone @(_isDragOver ? "drag-over" : "")"
+             @ondragover:preventDefault="true"
+             @ondragover="() => _isDragOver = true"
+             @ondragleave="() => _isDragOver = false"
+             @ondrop:preventDefault="true"
+             @ondrop="() => _isDragOver = false">
+            <InputFile OnChange="OnFileSelected" accept=".pdf,.docx,.txt,.md" />
+            <div class="upload-zone-icon">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/>
+                    <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+                </svg>
             </div>
-        </div>
-        <div class="card-body p-0">
-            @if (_isLoading)
+            @if (_selectedFile != null)
             {
-                <div class="text-center py-5">
-                    <div class="spinner-border" role="status"></div>
-                </div>
-            }
-            else if (_documents.Count == 0)
-            {
-                <p class="text-center text-muted py-4 mb-0">No documents found.</p>
+                <p class="upload-zone-title" style="color:var(--primary);">@_selectedFile.Name</p>
+                <p class="upload-zone-sub">@FormatFileSize(_selectedFile.Size) — ready to upload</p>
             }
             else
             {
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>File</th>
-                                <th>Status</th>
-                                <th>Chunks</th>
-                                <th>Tags</th>
-                                <th>Uploaded</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var doc in _documents)
-                            {
-                                <tr>
-                                    <td>
-                                        <div class="fw-medium">@doc.FileName</div>
-                                        <small class="text-muted">@FormatFileSize(doc.FileSize)</small>
-                                    </td>
-                                    <td>
-                                        <span class="badge @GetStatusBadgeClass(doc.Status)">@doc.Status</span>
-                                        @if (doc.ErrorMessage != null)
-                                        {
-                                            <small class="d-block text-danger">@doc.ErrorMessage</small>
-                                        }
-                                    </td>
-                                    <td>@doc.ChunkCount</td>
-                                    <td>
-                                        @foreach (var tag in doc.Tags)
-                                        {
-                                            <span class="badge bg-secondary me-1">@tag</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        <div>@doc.UploadedAt.ToString("MMM d, yyyy")</div>
-                                        @if (doc.UpdatedAt.HasValue)
-                                        {
-                                            <small class="text-muted">Updated @doc.UpdatedAt.Value.ToString("MMM d")</small>
-                                        }
-                                    </td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-danger"
-                                                @onclick="() => DeleteDocumentAsync(doc.Id)"
-                                                disabled="@_deletingIds.Contains(doc.Id)">
-                                            @if (_deletingIds.Contains(doc.Id))
-                                            {
-                                                <span class="spinner-border spinner-border-sm"></span>
-                                            }
-                                            else { <span>Delete</span> }
-                                        </button>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
+                <p class="upload-zone-title">Drop files here or click to browse</p>
+                <p class="upload-zone-sub">PDF, DOCX, TXT, MD — up to 50 MB</p>
             }
+        </div>
+
+        @* Tags + Upload controls *@
+        <div style="display:flex;gap:var(--space-3);align-items:flex-end;margin-top:var(--space-4);flex-wrap:wrap;">
+            <div style="flex:1;min-width:200px;">
+                <label style="font-size:var(--text-xs);font-weight:var(--weight-medium);color:var(--text-secondary);display:block;margin-bottom:var(--space-1);">
+                    Tags (comma-separated)
+                </label>
+                <input type="text" class="input-modern" placeholder="e.g. finance, q3, report"
+                       @bind="_tagsInput" @bind:event="oninput" />
+            </div>
+            <button class="btn-primary-modern" style="height:38px;padding:0 var(--space-5);"
+                    @onclick="UploadAsync"
+                    disabled="@(_selectedFile == null || _isUploading)">
+                @if (_isUploading)
+                {
+                    <div class="spinner-sm"></div>
+                    <span>Uploading…</span>
+                }
+                else
+                {
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/>
+                        <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+                    </svg>
+                    <span>Upload</span>
+                }
+            </button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_uploadMessage))
+        {
+            <div class="alert-modern @(_uploadSuccess ? "alert-success" : "alert-danger") mt-3" style="margin-top:var(--space-3);">
+                @if (_uploadSuccess)
+                {
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                }
+                else
+                {
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                }
+                @_uploadMessage
+            </div>
+        }
+
+        @* Supported formats *@
+        @if (_supportedTypes.Count > 0)
+        {
+            <div style="display:flex;flex-wrap:wrap;gap:var(--space-1);margin-top:var(--space-3);align-items:center;">
+                <span style="font-size:var(--text-xs);color:var(--text-muted);margin-right:var(--space-1);">Supported:</span>
+                @foreach (var t in _supportedTypes)
+                {
+                    <span class="tag-chip">@t</span>
+                }
+            </div>
+        }
+    </div>
+
+    @* ── Document list header + tag filter ── *@
+    <div class="section-header" style="margin-bottom:var(--space-4);">
+        <div>
+            <h2 class="section-title" style="font-size:var(--text-lg);">
+                Uploaded Documents
+                <span style="font-size:var(--text-sm);font-weight:var(--weight-normal);color:var(--text-muted);margin-left:var(--space-2);">@_documents.Count total</span>
+            </h2>
+        </div>
+        <div class="filter-bar">
+            <input type="text" class="input-modern" style="width:160px;"
+                   placeholder="Filter by tag…"
+                   @bind="_tagFilter" @bind:event="oninput"
+                   @onkeydown="OnFilterKeyDownAsync" />
+            <button class="btn-primary-modern" @onclick="ApplyFilterAsync" style="padding:var(--space-2) var(--space-3);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                </svg>
+                Filter
+            </button>
+            <button class="btn-ghost" @onclick="ClearFilterAsync">
+                All
+            </button>
         </div>
     </div>
 
-    @* ---- Supported types ---- *@
-    @if (_supportedTypes.Count > 0)
+    @* ── Document cards ── *@
+    @if (_isLoading)
     {
-        <div class="mt-3">
-            <small class="text-muted me-1">Supported formats:</small>
-            @foreach (var t in _supportedTypes)
+        <div style="display:flex;justify-content:center;padding:var(--space-12) 0;">
+            <div class="spinner-sm spinner-dark" style="width:24px;height:24px;border-width:3px;"></div>
+        </div>
+    }
+    else if (_documents.Count == 0)
+    {
+        <div class="card-modern">
+            <div class="empty-state">
+                <div class="empty-state-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                </div>
+                <h3>No documents yet</h3>
+                <p>Upload a document above to start building your knowledge base.</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="docs-grid">
+            @foreach (var doc in _documents)
             {
-                <span class="badge bg-light text-dark border me-1">@t</span>
+                <div class="doc-card">
+                    <div class="doc-card-status-bar @doc.Status.ToLower()"></div>
+                    <div class="doc-card-body">
+                        <div class="doc-card-header">
+                            <div class="doc-card-icon">
+                                @if (doc.ContentType.Contains("pdf"))
+                                {
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                        <polyline points="14 2 14 8 20 8"/>
+                                        <line x1="9" y1="15" x2="15" y2="15"/>
+                                    </svg>
+                                }
+                                else
+                                {
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                        <polyline points="14 2 14 8 20 8"/>
+                                    </svg>
+                                }
+                            </div>
+                            <span class="doc-card-name" title="@doc.FileName">@doc.FileName</span>
+                        </div>
+
+                        <div class="doc-card-meta">
+                            <span class="status-badge @GetStatusClass(doc.Status)">@doc.Status</span>
+                            <span style="font-size:var(--text-xs);color:var(--text-muted);">@doc.ChunkCount chunk@(doc.ChunkCount == 1 ? "" : "s")</span>
+                        </div>
+
+                        @if (doc.Tags.Count > 0)
+                        {
+                            <div class="doc-card-tags">
+                                @foreach (var tag in doc.Tags)
+                                {
+                                    <span class="tag-chip">@tag</span>
+                                }
+                            </div>
+                        }
+
+                        @if (doc.ErrorMessage != null)
+                        {
+                            <div style="font-size:var(--text-xs);color:var(--danger-text);background:var(--danger-light);padding:var(--space-2) var(--space-3);border-radius:var(--radius-sm);">
+                                @doc.ErrorMessage
+                            </div>
+                        }
+                    </div>
+
+                    <div class="doc-card-footer">
+                        <div>
+                            <div class="doc-card-date">@doc.UploadedAt.ToString("MMM d, yyyy")</div>
+                            @if (doc.UpdatedAt.HasValue)
+                            {
+                                <div class="doc-card-date">Updated @doc.UpdatedAt.Value.ToString("MMM d")</div>
+                            }
+                        </div>
+                        <button class="btn-icon btn-icon-danger"
+                                @onclick="() => DeleteDocumentAsync(doc.Id)"
+                                disabled="@_deletingIds.Contains(doc.Id)"
+                                title="Delete document">
+                            @if (_deletingIds.Contains(doc.Id))
+                            {
+                                <div class="spinner-sm spinner-dark" style="width:12px;height:12px;border-width:2px;"></div>
+                            }
+                            else
+                            {
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+                                    <path d="M10 11v6"/><path d="M14 11v6"/>
+                                    <path d="M9 6V4h6v2"/>
+                                </svg>
+                            }
+                        </button>
+                    </div>
+                </div>
             }
         </div>
     }
@@ -159,6 +250,7 @@
     private IBrowserFile? _selectedFile;
     private string _tagsInput = string.Empty;
     private string _tagFilter = string.Empty;
+    private bool _isDragOver = false;
 
     private bool _isLoading = true;
     private bool _isUploading = false;
@@ -203,6 +295,7 @@
     {
         _selectedFile = e.File;
         _uploadMessage = string.Empty;
+        _isDragOver = false;
     }
 
     private async Task UploadAsync()
@@ -266,16 +359,27 @@
         }
     }
 
-    private string GetStatusBadgeClass(string status) => status switch
+    private async Task OnFilterKeyDownAsync(KeyboardEventArgs e)
     {
-        "Completed"  => "bg-success",
-        "Processing" => "bg-warning text-dark",
-        "Failed"     => "bg-danger",
-        _            => "bg-secondary"
+        if (e.Key == "Enter") await ApplyFilterAsync();
+    }
+
+    private async Task ClearFilterAsync()
+    {
+        _tagFilter = string.Empty;
+        await LoadDocumentsAsync(null);
+    }
+
+    private static string GetStatusClass(string status) => status switch
+    {
+        "Completed"  => "status-success",
+        "Processing" => "status-warning",
+        "Failed"     => "status-danger",
+        _            => "status-info"
     };
 
     private static string FormatFileSize(long bytes) =>
-        bytes < 1024       ? $"{bytes} B" :
-        bytes < 1_048_576  ? $"{bytes / 1024.0:F1} KB" :
-                             $"{bytes / 1_048_576.0:F1} MB";
+        bytes < 1024      ? $"{bytes} B" :
+        bytes < 1_048_576 ? $"{bytes / 1024.0:F1} KB" :
+                            $"{bytes / 1_048_576.0:F1} MB";
 }

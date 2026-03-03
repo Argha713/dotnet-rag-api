@@ -9,6 +9,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat&logo=dotnet)
 ![C#](https://img.shields.io/badge/C%23-12-239120?style=flat&logo=csharp)
 ![Tests](https://img.shields.io/badge/tests-244%20passing-brightgreen)
+![Phase](https://img.shields.io/badge/phase-9%20UI%2FUX%20in%20progress-orange)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ---
@@ -267,7 +268,7 @@ Cors__AllowedOrigins__0=https://your-frontend.azurestaticapps.net
 | **Document Parsing** | PdfPig, DocumentFormat.OpenXml |
 | **Database** | PostgreSQL (Neon) + Entity Framework Core |
 | **Logging** | Serilog (Console + File sinks) |
-| **Frontend** | Blazor WebAssembly (.NET 8) |
+| **Frontend** | Blazor WebAssembly (.NET 8) — Inter design system, indigo theme |
 | **Hosting** | Azure Container Apps + Azure Static Web Apps |
 | **CI/CD** | GitHub Actions → GHCR → Azure |
 | **Testing** | xUnit, Moq, FluentAssertions (244 tests) |
