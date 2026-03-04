@@ -1,6 +1,9 @@
 @* Argha - 2026-03-03 - #12 - Redesigned navigation: white navbar, SVG icons, pill nav items *@
+@* Argha - 2026-03-04 - #17 - Added Workspaces link and active workspace chip *@
 @* Argha - 2026-02-21 - Commented: old Bootstrap dark navbar *@
 @* <nav class="navbar navbar-expand-lg navbar-dark bg-dark"> *@
+@inject WorkspaceStateService WsState
+@implements IDisposable
 
 <nav class="navbar navbar-modern navbar-expand-lg">
     <div class="container-fluid">
@@ -44,6 +47,15 @@
                     </NavLink>
                 </li>
                 <li class="nav-item">
+                    <NavLink class="nav-link-modern" href="/workspaces" ActiveClass="active">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                            <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                        </svg>
+                        Workspaces
+                    </NavLink>
+                </li>
+                <li class="nav-item">
                     <NavLink class="nav-link-modern" href="/health" ActiveClass="active">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -52,6 +64,36 @@
                     </NavLink>
                 </li>
             </ul>
+
+            @* Argha - 2026-03-04 - #17 - Active workspace chip shown on right end of navbar *@
+            @if (WsState.Active != null)
+            {
+                <div class="ms-auto me-3">
+                    <a href="/workspaces" class="workspace-chip" style="text-decoration:none;">
+                        <span class="ws-dot"></span>
+                        @WsState.Active.Name
+                    </a>
+                </div>
+            }
         </div>
     </div>
 </nav>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            WsState.OnChanged += OnWorkspaceChanged;
+            await WsState.InitializeAsync();
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        WsState.OnChanged -= OnWorkspaceChanged;
+    }
+
+    private void OnWorkspaceChanged() => InvokeAsync(StateHasChanged);
+}

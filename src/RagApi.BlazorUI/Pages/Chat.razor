@@ -1,9 +1,11 @@
 @* Argha - 2026-03-03 - #13 - Chat page redesign: modern sidebar, indigo bubbles, improved input & sources *@
+@* Argha - 2026-03-04 - #17 - Scoped conversation list per workspace; reload on workspace switch *@
 @* Argha - 2026-02-21 - Original chat page: sidebar with conversation list + streaming message panel *@
 @page "/"
 @inject ChatApiService ChatService
 @inject ConversationApiService ConversationService
 @inject LocalStorageService LocalStorage
+@inject WorkspaceStateService WsState
 @implements IAsyncDisposable
 
 <PageTitle>Chat — RAG Chat</PageTitle>
@@ -174,7 +176,7 @@
 </div>
 
 @code {
-    // ── Conversation list (IDs persisted in localStorage) ──
+    // ── Conversation list (IDs persisted in localStorage per workspace) ──
     private List<StoredConversation> _conversations = new();
     private Guid _activeConvId = Guid.Empty;
 
@@ -189,10 +191,41 @@
     private ElementReference _messagesContainer;
     private CancellationTokenSource? _streamCts;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        // Argha - 2026-02-21 - Restore stored conversations from localStorage on page load
-        var stored = await LocalStorage.GetItemAsync<List<StoredConversation>>("rag_conversations");
+        // Argha - 2026-03-04 - #17 - Subscribe early so workspace switches reload conversation list
+        WsState.OnChanged += OnWorkspaceChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Argha - 2026-03-04 - #17 - Ensure workspace state loaded before reading active workspace key
+            await WsState.InitializeAsync();
+            await LoadConversationsAsync();
+            StateHasChanged();
+        }
+    }
+
+    // Argha - 2026-03-04 - #17 - Reload conversation list from new workspace key when active workspace changes
+    private void OnWorkspaceChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            _conversations = new();
+            _activeConvId = Guid.Empty;
+            _messages = new();
+            await LoadConversationsAsync();
+            StateHasChanged();
+        });
+    }
+
+    // Argha - 2026-03-04 - #17 - Conversation list scoped per workspace: key = rag_conversations_{workspaceId}
+    private async Task LoadConversationsAsync()
+    {
+        var key = $"rag_conversations_{WsState.Active?.Id ?? Guid.Empty}";
+        var stored = await LocalStorage.GetItemAsync<List<StoredConversation>>(key);
         _conversations = stored ?? new List<StoredConversation>();
 
         if (_conversations.Count > 0)
@@ -324,13 +357,16 @@
             await SendMessageAsync();
     }
 
+    // Argha - 2026-03-04 - #17 - localStorage key scoped to active workspace so conversations are isolated per workspace
     private async Task PersistConversationsAsync()
     {
-        await LocalStorage.SetItemAsync("rag_conversations", _conversations);
+        var key = $"rag_conversations_{WsState.Active?.Id ?? Guid.Empty}";
+        await LocalStorage.SetItemAsync(key, _conversations);
     }
 
     public async ValueTask DisposeAsync()
     {
+        WsState.OnChanged -= OnWorkspaceChanged;
         _streamCts?.Cancel();
         _streamCts?.Dispose();
         await ValueTask.CompletedTask;

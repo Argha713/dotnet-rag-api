@@ -8,8 +8,8 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 [![Deploy](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml/badge.svg)](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat&logo=dotnet)
 ![C#](https://img.shields.io/badge/C%23-12-239120?style=flat&logo=csharp)
-![Tests](https://img.shields.io/badge/tests-265%20passing-brightgreen)
-![Phase](https://img.shields.io/badge/phase-10%20Multi--tenancy%20complete-brightgreen)
+![Tests](https://img.shields.io/badge/tests-273%20passing-brightgreen)
+![Phase](https://img.shields.io/badge/phase-10.1%20Workspace%20UI%20complete-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ---
@@ -52,9 +52,17 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 ### Multi-tenancy / Workspaces ✅
 - **Isolated workspaces** — Each workspace has its own Qdrant collection + scoped PostgreSQL rows; zero cross-tenant data leakage
 - **Per-workspace API keys** — 32-byte random hex key; SHA-256 hash stored; plaintext shown once on creation
-- **Workspace CRUD** — `POST /api/workspaces` (create), `GET /api/workspaces/{id}` (get), `DELETE /api/workspaces/{id}` (cascade delete)
+- **Workspace CRUD** — `POST /api/workspaces` (create), `GET /api/workspaces/{id}` (get), `GET /api/workspaces/current` (resolve from key), `DELETE /api/workspaces/{id}` (cascade delete)
 - **Cascade delete** — Deleting a workspace removes its Qdrant collection, all documents, and all conversations atomically
 - **Backward compatibility** — Default workspace (`documents` collection) maps to the global `ApiAuth:ApiKey` config key
+
+### Workspace UI ✅
+- **Workspaces page** — Create, switch, delete, and import workspaces from `/workspaces`
+- **Navbar chip** — Active workspace shown as indigo pill in the top navigation bar
+- **Per-workspace chat history** — localStorage conversation list scoped by workspace ID; switches automatically on workspace change
+- **API key modal** — One-time display with clipboard copy; Done button re-enabled after 10 s if clipboard is blocked
+- **Import flow** — Paste an existing API key to link a workspace to this browser session (validates via `GET /api/documents`, resolves ID via `GET /api/workspaces/current`)
+- **Dynamic key injection** — `WorkspaceKeyHandler` DelegatingHandler replaces the static `X-Api-Key` header on every outgoing request
 
 ### Security & Reliability
 - **API key authentication** — Protect all endpoints via `X-Api-Key` header; resolves workspace from DB hash lookup
@@ -74,7 +82,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 - **GitHub Actions CI/CD** — Automated test, build, and deploy pipeline
 - **Azure deployment** — Container Apps (scales to zero) + Static Web Apps (free tier)
 - **Modern SaaS UI ✅** — Inter design system, indigo theme, drag-drop uploads, glassmorphism health dashboard, footer
-- **265 unit tests** — xUnit + Moq + FluentAssertions across all layers
+- **273 unit tests** — xUnit + Moq + FluentAssertions across all layers
 
 ---
 
@@ -177,6 +185,7 @@ curl http://localhost:5000/api/system/health
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/workspaces` | Create workspace; returns plaintext API key (shown once) |
+| `GET` | `/api/workspaces/current` | Resolve current workspace from X-Api-Key header |
 | `GET` | `/api/workspaces/{id}` | Get workspace metadata |
 | `DELETE` | `/api/workspaces/{id}` | Cascade delete workspace, documents, and vector data |
 
@@ -287,7 +296,7 @@ Cors__AllowedOrigins__0=https://your-frontend.azurestaticapps.net
 | **Frontend** | Blazor WebAssembly (.NET 8) — Inter design system, indigo theme |
 | **Hosting** | Azure Container Apps + Azure Static Web Apps |
 | **CI/CD** | GitHub Actions → GHCR → Azure |
-| **Testing** | xUnit, Moq, FluentAssertions (265 tests) |
+| **Testing** | xUnit, Moq, FluentAssertions (273 tests) |
 | **API Docs** | Swagger / OpenAPI |
 
 ---
@@ -303,7 +312,7 @@ dotnet-rag-api/
 │   ├── RagApi.Domain/           # Core entities
 │   └── RagApi.Infrastructure/   # Qdrant, OpenAI, Azure, EF Core
 ├── tests/
-│   └── RagApi.Tests/            # 265 unit tests
+│   └── RagApi.Tests/            # 273 unit tests
 ├── .github/workflows/           # CI, Deploy API, Deploy UI
 ├── docker-compose.yml           # Local Qdrant + Ollama + PostgreSQL
 ├── Dockerfile                   # Production container image
