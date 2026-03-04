@@ -1,0 +1,456 @@
+@* Argha - 2026-03-04 - #17 - Workspace management page: create, switch, delete, import workspaces *@
+@page "/workspaces"
+@inject WorkspaceStateService WsState
+@inject WorkspaceApiService WsApi
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Workspaces — RAG Chat</PageTitle>
+
+<div class="page-body-scroll">
+<div style="max-width:1100px;margin:0 auto;padding:var(--space-6) var(--space-4);">
+
+    @* ── Page header ── *@
+    <div class="section-header">
+        <div>
+            <h1 class="section-title">Workspaces</h1>
+            <p class="section-subtitle">Manage isolated data environments for different teams or clients</p>
+        </div>
+        <button class="btn-primary-modern" @onclick="ToggleCreateForm" disabled="@_isCreating">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            New Workspace
+        </button>
+    </div>
+
+    @* ── Inline create form ── *@
+    @if (_showCreateForm)
+    {
+        <div class="card-modern" style="margin-bottom:var(--space-5);">
+            <h3 style="font-size:var(--text-base);font-weight:var(--weight-semibold);color:var(--text-primary);margin:0 0 var(--space-4);">Create New Workspace</h3>
+            @if (!string.IsNullOrEmpty(_createError))
+            {
+                <div class="alert-modern alert-danger" style="margin-bottom:var(--space-3);">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    @_createError
+                </div>
+            }
+            <div style="display:flex;gap:var(--space-3);align-items:flex-end;">
+                <div style="flex:1;">
+                    <label style="font-size:var(--text-xs);font-weight:var(--weight-medium);color:var(--text-secondary);display:block;margin-bottom:var(--space-1);">Workspace Name</label>
+                    <input type="text" class="input-modern" placeholder="e.g. Acme Corp, Beta Team"
+                           @bind="_createName" @bind:event="oninput"
+                           @onkeydown="HandleCreateKeyDown" />
+                </div>
+                <button class="btn-primary-modern" @onclick="CreateWorkspaceAsync"
+                        disabled="@(_isCreating || string.IsNullOrWhiteSpace(_createName))">
+                    @if (_isCreating)
+                    {
+                        <div class="spinner-sm"></div>
+                        <span>Creating…</span>
+                    }
+                    else
+                    {
+                        <span>Create</span>
+                    }
+                </button>
+                <button class="btn-ghost" @onclick="CancelCreate">Cancel</button>
+            </div>
+        </div>
+    }
+
+    @* ── Workspace cards ── *@
+    @if (WsState.Workspaces.Count == 0)
+    {
+        <div class="card-modern" style="margin-bottom:var(--space-5);">
+            <div class="empty-state" style="padding:var(--space-10) var(--space-8);">
+                <div class="empty-state-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                        <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                    </svg>
+                </div>
+                <h3>No workspaces yet</h3>
+                <p>Create your first workspace to start isolating data per team or client.</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="ws-card-grid" style="margin-bottom:var(--space-6);">
+            @foreach (var ws in WsState.Workspaces)
+            {
+                var isActive = WsState.Active?.Id == ws.Id;
+                var isConfirmingDelete = _confirmDeleteId == ws.Id;
+                var isDeleting = _deletingId == ws.Id;
+                <div class="card-modern @(isActive ? "ws-card-active" : "")">
+                    <div style="margin-bottom:var(--space-3);">
+                        @if (isActive)
+                        {
+                            <span class="status-badge status-success" style="margin-bottom:var(--space-2);display:inline-flex;">Active</span>
+                        }
+                        <h3 class="ws-card-name">@ws.Name</h3>
+                        <p class="ws-card-date">Created @ws.CreatedAt.ToLocalTime().ToString("MMM d, yyyy")</p>
+                    </div>
+                    <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;align-items:center;">
+                        @if (!isActive)
+                        {
+                            <button class="btn-ghost" style="font-size:var(--text-sm);"
+                                    @onclick="() => SwitchWorkspaceAsync(ws.Id)"
+                                    disabled="@_isSwitching">
+                                Switch
+                            </button>
+                        }
+                        @if (isConfirmingDelete)
+                        {
+                            <button class="btn-confirm-danger" @onclick="() => ConfirmDeleteAsync(ws.Id)">
+                                Confirm?
+                            </button>
+                        }
+                        else
+                        {
+                            <button class="btn-icon btn-icon-danger" title="Delete workspace"
+                                    @onclick="() => InitiateDelete(ws.Id)"
+                                    disabled="@isDeleting">
+                                @if (isDeleting)
+                                {
+                                    <div class="spinner-sm spinner-dark"></div>
+                                }
+                                else
+                                {
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+                                        <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+                                    </svg>
+                                }
+                            </button>
+                        }
+                    </div>
+                    @if (!string.IsNullOrEmpty(_deleteError) && isConfirmingDelete)
+                    {
+                        <div class="alert-modern alert-danger" style="margin-top:var(--space-2);">@_deleteError</div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @* ── Import existing workspace ── *@
+    <div class="card-modern">
+        <h3 style="font-size:var(--text-base);font-weight:var(--weight-semibold);color:var(--text-primary);margin:0 0 var(--space-1);">Import Existing Workspace</h3>
+        <p style="font-size:var(--text-sm);color:var(--text-muted);margin:0 0 var(--space-4);">Already have an API key? Add the workspace to this browser session.</p>
+        @if (!string.IsNullOrEmpty(_importError))
+        {
+            <div class="alert-modern alert-danger" style="margin-bottom:var(--space-3);">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                @_importError
+            </div>
+        }
+        <div style="display:flex;gap:var(--space-3);align-items:flex-end;flex-wrap:wrap;">
+            <div style="flex:1;min-width:150px;">
+                <label style="font-size:var(--text-xs);font-weight:var(--weight-medium);color:var(--text-secondary);display:block;margin-bottom:var(--space-1);">Display Name</label>
+                <input type="text" class="input-modern" placeholder="e.g. Acme Corp"
+                       @bind="_importName" @bind:event="oninput" />
+            </div>
+            <div style="flex:2;min-width:200px;">
+                <label style="font-size:var(--text-xs);font-weight:var(--weight-medium);color:var(--text-secondary);display:block;margin-bottom:var(--space-1);">API Key</label>
+                <input type="password" class="input-modern" placeholder="Paste your workspace API key"
+                       @bind="_importKey" @bind:event="oninput" />
+            </div>
+            <button class="btn-primary-modern" @onclick="ImportWorkspaceAsync"
+                    disabled="@(_isImporting || string.IsNullOrWhiteSpace(_importName) || string.IsNullOrWhiteSpace(_importKey))">
+                @if (_isImporting)
+                {
+                    <div class="spinner-sm"></div>
+                    <span>Validating…</span>
+                }
+                else
+                {
+                    <span>Add</span>
+                }
+            </button>
+        </div>
+    </div>
+
+</div>
+</div>
+
+@* ── API Key Modal ── *@
+@if (_showKeyModal)
+{
+    <div class="workspace-modal-overlay">
+        <div class="workspace-modal">
+            <h2 style="font-size:var(--text-lg);font-weight:var(--weight-semibold);color:var(--text-primary);margin:0 0 var(--space-1);">
+                Workspace Created
+            </h2>
+            <p style="font-size:var(--text-sm);color:var(--text-muted);margin:0 0 var(--space-4);">@_newWorkspaceName</p>
+            <div style="height:1px;background:var(--border);margin-bottom:var(--space-4);"></div>
+            <div class="alert-modern alert-info" style="margin-bottom:var(--space-4);">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                Save this key — it won't be shown again
+            </div>
+            <div class="api-key-box">
+                <span class="api-key-text">@_newApiKey</span>
+                <button class="btn-ghost api-key-copy-btn" @onclick="CopyKeyAsync" title="Copy to clipboard">
+                    @if (_keyCopied)
+                    {
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <span>Copied!</span>
+                    }
+                    else
+                    {
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                        <span>Copy</span>
+                    }
+                </button>
+            </div>
+            <button class="btn-primary-modern w-100" style="margin-top:var(--space-5);"
+                    @onclick="DismissModal"
+                    disabled="@(!_keyCopied && !_doneButtonEnabled)">
+                Done — I saved it
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    // ── Create state ──
+    private bool _showCreateForm;
+    private string _createName = string.Empty;
+    private bool _isCreating;
+    private string _createError = string.Empty;
+
+    // ── Modal state ──
+    private bool _showKeyModal;
+    private string _newWorkspaceName = string.Empty;
+    private string _newApiKey = string.Empty;
+    private bool _keyCopied;
+    private bool _doneButtonEnabled;
+    private StoredWorkspace? _pendingWorkspace;
+
+    // ── Delete state ──
+    private Guid? _confirmDeleteId;
+    private Guid? _deletingId;
+    private string _deleteError = string.Empty;
+
+    // ── Switch state ──
+    private bool _isSwitching;
+
+    // ── Import state ──
+    private string _importName = string.Empty;
+    private string _importKey = string.Empty;
+    private bool _isImporting;
+    private string _importError = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            WsState.OnChanged += OnWorkspaceChanged;
+            await WsState.InitializeAsync();
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        WsState.OnChanged -= OnWorkspaceChanged;
+    }
+
+    private void OnWorkspaceChanged() => InvokeAsync(StateHasChanged);
+
+    private void ToggleCreateForm()
+    {
+        _showCreateForm = !_showCreateForm;
+        _createName = string.Empty;
+        _createError = string.Empty;
+    }
+
+    private void CancelCreate()
+    {
+        _showCreateForm = false;
+        _createName = string.Empty;
+        _createError = string.Empty;
+    }
+
+    private async Task HandleCreateKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_createName))
+            await CreateWorkspaceAsync();
+    }
+
+    private async Task CreateWorkspaceAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_createName) || _isCreating) return;
+        _isCreating = true;
+        _createError = string.Empty;
+
+        try
+        {
+            var created = await WsApi.CreateAsync(_createName.Trim());
+
+            _newWorkspaceName = created.Name;
+            _newApiKey = created.ApiKey;
+            _keyCopied = false;
+            _doneButtonEnabled = false;
+            _showKeyModal = true;
+            _showCreateForm = false;
+            _createName = string.Empty;
+
+            _pendingWorkspace = new StoredWorkspace
+            {
+                Id = created.Id,
+                Name = created.Name,
+                ApiKey = created.ApiKey,
+                CreatedAt = created.CreatedAt
+            };
+
+            // Argha - 2026-03-04 - #17 - Re-enable Done button after 10s even if key not copied
+            _ = Task.Delay(10_000).ContinueWith(_ =>
+                InvokeAsync(() => { _doneButtonEnabled = true; StateHasChanged(); }));
+        }
+        catch (Exception ex)
+        {
+            _createError = $"Failed to create workspace: {ex.Message}";
+        }
+        finally
+        {
+            _isCreating = false;
+        }
+    }
+
+    private async Task CopyKeyAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _newApiKey);
+        }
+        catch
+        {
+            // Best effort — clipboard API unavailable in some contexts
+        }
+        _keyCopied = true;
+    }
+
+    private async Task DismissModal()
+    {
+        _showKeyModal = false;
+        if (_pendingWorkspace != null)
+        {
+            await WsState.AddWorkspaceAsync(_pendingWorkspace);
+            await WsState.SetActiveAsync(_pendingWorkspace.Id);
+            _pendingWorkspace = null;
+        }
+    }
+
+    private async Task SwitchWorkspaceAsync(Guid id)
+    {
+        _isSwitching = true;
+        try
+        {
+            await WsState.SetActiveAsync(id);
+        }
+        finally
+        {
+            _isSwitching = false;
+        }
+    }
+
+    private void InitiateDelete(Guid id)
+    {
+        _confirmDeleteId = id;
+        _deleteError = string.Empty;
+
+        // Argha - 2026-03-04 - #17 - Auto-cancel confirm state after 3s if not acted upon
+        _ = Task.Delay(3_000).ContinueWith(_ => InvokeAsync(() =>
+        {
+            if (_confirmDeleteId == id)
+            {
+                _confirmDeleteId = null;
+                StateHasChanged();
+            }
+        }));
+    }
+
+    private async Task ConfirmDeleteAsync(Guid id)
+    {
+        _confirmDeleteId = null;
+        _deletingId = id;
+        _deleteError = string.Empty;
+
+        try
+        {
+            await WsApi.DeleteAsync(id);
+            await WsState.RemoveWorkspaceAsync(id);
+        }
+        catch (Exception ex)
+        {
+            _deleteError = $"Failed to delete: {ex.Message}";
+        }
+        finally
+        {
+            _deletingId = null;
+        }
+    }
+
+    private async Task ImportWorkspaceAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_importName) || string.IsNullOrWhiteSpace(_importKey) || _isImporting) return;
+        _isImporting = true;
+        _importError = string.Empty;
+
+        try
+        {
+            var keyTrimmed = _importKey.Trim();
+
+            // Argha - 2026-03-04 - #17 - Validate key explicitly; passes key directly to bypass active-key injection
+            var isValid = await WsApi.ValidateKeyAsync(keyTrimmed);
+            if (!isValid)
+            {
+                _importError = "Invalid API key — check it and try again.";
+                return;
+            }
+
+            var current = await WsApi.GetCurrentAsync(keyTrimmed);
+            if (current == null)
+            {
+                _importError = "Could not resolve workspace from this key.";
+                return;
+            }
+
+            var ws = new StoredWorkspace
+            {
+                Id = current.Id,
+                Name = _importName.Trim(),
+                ApiKey = keyTrimmed,
+                CreatedAt = current.CreatedAt
+            };
+
+            await WsState.AddWorkspaceAsync(ws);
+            await WsState.SetActiveAsync(ws.Id);
+            _importName = string.Empty;
+            _importKey = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _importError = $"Import failed: {ex.Message}";
+        }
+        finally
+        {
+            _isImporting = false;
+        }
+    }
+}

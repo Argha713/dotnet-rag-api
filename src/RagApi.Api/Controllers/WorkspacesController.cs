@@ -48,6 +48,19 @@ public class WorkspacesController : ControllerBase
     }
 
     /// <summary>
+    /// Returns the workspace resolved from the caller's X-Api-Key header.
+    /// Used by the UI import flow to resolve workspace ID and name from a raw key.
+    /// </summary>
+    // Argha - 2026-03-04 - #17 - Needed by Blazor import flow: resolve workspace from key without knowing ID
+    [HttpGet("current")]
+    [ProducesResponseType(typeof(WorkspaceDto), StatusCodes.Status200OK)]
+    public IActionResult GetCurrentWorkspace()
+    {
+        var ws = _workspaceContext.Current;
+        return Ok(new WorkspaceDto(ws.Id, ws.Name, ws.CreatedAt, ws.CollectionName));
+    }
+
+    /// <summary>
     /// Get workspace metadata by ID (API key is not returned).
     /// </summary>
     [HttpGet("{id:guid}")]
