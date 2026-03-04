@@ -10,6 +10,7 @@ using RagApi.Infrastructure.AI;
 using RagApi.Infrastructure.Data;
 using RagApi.Infrastructure.DocumentProcessing;
 using RagApi.Infrastructure.HealthChecks;
+using RagApi.Infrastructure.Services;
 using RagApi.Infrastructure.VectorStore;
 
 namespace RagApi.Infrastructure;
@@ -54,7 +55,7 @@ public static class DependencyInjection
             services.AddHttpClient<IChatService, OllamaChatService>();
         }
 
-        // Argha - 2026-02-21 - Switch vector store backend based on VectorStore:Provider 
+        // Argha - 2026-02-21 - Switch vector store backend based on VectorStore:Provider
         var vectorStoreConfig = configuration.GetSection(VectorStoreConfiguration.SectionName)
             .Get<VectorStoreConfiguration>() ?? new VectorStoreConfiguration();
 
@@ -65,9 +66,8 @@ public static class DependencyInjection
                 new SearchIndexClient(
                     new Uri(azSettings.Endpoint),
                     new AzureKeyCredential(azSettings.ApiKey)));
-            services.AddSingleton(sp =>
-                sp.GetRequiredService<SearchIndexClient>()
-                  .GetSearchClient(azSettings.IndexName));
+            // Argha - 2026-03-04 - #17 - SearchClient no longer registered as singleton;
+            // AzureAiSearchVectorStore creates per-collection clients from SearchIndexClient
             services.AddSingleton<IVectorStore, AzureAiSearchVectorStore>();
         }
         else
@@ -87,8 +87,12 @@ public static class DependencyInjection
         services.AddDbContext<RagApiDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IDocumentRepository, DocumentRepository>();
 
-        // Argha - 2026-02-19 - Conversation session repository and service 
+        // Argha - 2026-02-19 - Conversation session repository and service
         services.AddScoped<IConversationRepository, ConversationRepository>();
+
+        // Argha - 2026-03-04 - #17 - Workspace repository and context (Scoped per request)
+        services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
+        services.AddScoped<IWorkspaceContext, WorkspaceContext>();
 
         // Register application services
         services.AddScoped<RagService>();
@@ -96,6 +100,8 @@ public static class DependencyInjection
         services.AddScoped<ConversationService>();
         // Argha - 2026-02-21 - Conversation export service registered
         services.AddScoped<ConversationExportService>();
+        // Argha - 2026-03-04 - #17 - Workspace service for workspace lifecycle management
+        services.AddScoped<WorkspaceService>();
 
         // Argha - 2026-03-02 - #6 - PostgreSQL health check replaces SqliteHealthCheck
         var healthChecks = services.AddHealthChecks()

@@ -21,6 +21,8 @@ public class SystemController : ControllerBase
     private readonly DocumentService _documentService;
     private readonly AiConfiguration _aiConfig;
     private readonly ILogger<SystemController> _logger;
+    // Argha - 2026-03-04 - #17 - Provides the workspace's collection name for stats scoping
+    private readonly IWorkspaceContext _workspaceContext;
 
     public SystemController(
         IVectorStore vectorStore,
@@ -28,7 +30,8 @@ public class SystemController : ControllerBase
         IChatService chatService,
         DocumentService documentService,
         IOptions<AiConfiguration> aiConfig,
-        ILogger<SystemController> logger)
+        ILogger<SystemController> logger,
+        IWorkspaceContext workspaceContext)
     {
         _vectorStore = vectorStore;
         _embeddingService = embeddingService;
@@ -36,9 +39,10 @@ public class SystemController : ControllerBase
         _documentService = documentService;
         _aiConfig = aiConfig.Value;
         _logger = logger; // Argha - 2026-02-15 - Kept for intentional graceful degradation in GetStats
+        _workspaceContext = workspaceContext;
     }
 
-    // Health check endpoint moved to MapHealthChecks("/api/system/health") in Program.cs 
+    // Health check endpoint moved to MapHealthChecks("/api/system/health") in Program.cs
 
     /// <summary>
     /// Get system statistics
@@ -49,7 +53,8 @@ public class SystemController : ControllerBase
     {
         try
         {
-            var vectorStats = await _vectorStore.GetStatsAsync(cancellationToken);
+            // Argha - 2026-03-04 - #17 - Stats scoped to the current workspace's collection
+            var vectorStats = await _vectorStore.GetStatsAsync(_workspaceContext.Current.CollectionName, cancellationToken);
             var documents = await _documentService.GetAllDocumentsAsync();
 
             return Ok(new SystemStatsDto

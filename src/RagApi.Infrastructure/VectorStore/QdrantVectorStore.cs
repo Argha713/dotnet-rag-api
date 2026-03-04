@@ -49,56 +49,68 @@ public class QdrantVectorStore : IVectorStore
         _logger = logger;
     }
 
-    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    // Argha - 2026-03-04 - #17 - Public; replaces private EnsureCollectionAsync + InitializeAsync
+    // Called at startup per-workspace and when a new workspace is created
+    public async Task EnsureCollectionAsync(string collectionName, CancellationToken cancellationToken = default)
     {
         try
         {
-            await EnsureCollectionAsync(cancellationToken);
+            var collections = await _client.ListCollectionsAsync(cancellationToken);
+
+            if (!collections.Any(c => c == collectionName))
+            {
+                _logger.LogInformation("Creating Qdrant collection: {CollectionName}", collectionName);
+
+                await _client.CreateCollectionAsync(
+                    name: collectionName,
+                    vectorParams: new VectorParams
+                    {
+                        Size = (ulong)_embeddingService.EmbeddingDimension,
+                        Distance = Distance.Cosine
+                    },
+                    ct: cancellationToken);
+
+                _logger.LogInformation("Collection created successfully: {CollectionName}", collectionName);
+            }
+            else
+            {
+                _logger.LogDebug("Collection {CollectionName} already exists", collectionName);
+            }
+
+            // Argha - 2026-02-20 - Create full-text payload index on 'content' for keyword search
+            // CreatePayloadIndexAsync is idempotent — safe to call on every startup
+            await _client.CreatePayloadIndexAsync(
+                name: collectionName,
+                field: "content",
+                schema: PayloadSchemaType.Text,
+                ct: cancellationToken);
+            _logger.LogDebug("Full-text payload index on 'content' ensured for {CollectionName}", collectionName);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to initialize Qdrant collection");
+            _logger.LogError(ex, "Failed to ensure Qdrant collection {CollectionName}", collectionName);
             throw;
         }
     }
 
-    // Argha - 2026-03-02 - #5 - Idempotent: checks collection exists before creating; called on startup and on NotFound recovery
-    private async Task EnsureCollectionAsync(CancellationToken cancellationToken = default)
+    // Argha - 2026-03-04 - #17 - Delete a workspace's Qdrant collection; called during workspace deletion cascade
+    public async Task DeleteCollectionAsync(string collectionName, CancellationToken cancellationToken = default)
     {
-        var collections = await _client.ListCollectionsAsync(cancellationToken);
-
-        if (!collections.Any(c => c == _config.CollectionName))
+        try
         {
-            _logger.LogInformation("Creating Qdrant collection: {CollectionName}", _config.CollectionName);
-
-            await _client.CreateCollectionAsync(
-                name: _config.CollectionName,
-                vectorParams: new VectorParams
-                {
-                    Size = (ulong)_embeddingService.EmbeddingDimension,
-                    Distance = Distance.Cosine
-                },
-                ct: cancellationToken);
-
-            _logger.LogInformation("Collection created successfully");
+            await _client.DeleteCollectionAsync(collectionName, cancellationToken);
+            _logger.LogInformation("Deleted Qdrant collection: {CollectionName}", collectionName);
         }
-        else
+        catch (Exception ex)
         {
-            _logger.LogDebug("Collection {CollectionName} already exists", _config.CollectionName);
+            _logger.LogError(ex, "Failed to delete Qdrant collection {CollectionName}", collectionName);
+            throw;
         }
-
-        // Argha - 2026-02-20 - Create full-text payload index on 'content' for keyword search
-        // CreatePayloadIndexAsync is idempotent — safe to call on every startup
-        await _client.CreatePayloadIndexAsync(
-            name: _config.CollectionName,
-            field: "content",
-            schema: PayloadSchemaType.Text,
-            ct: cancellationToken);
-        _logger.LogDebug("Full-text payload index on 'content' ensured");
     }
 
     // Argha - 2026-03-02 - #5 - Catches NotFound, reinitializes collection, retries once; covers all public methods
-    private async Task<T> ExecuteWithReinitAsync<T>(Func<CancellationToken, Task<T>> operation, CancellationToken ct)
+    // Argha - 2026-03-04 - #17 - Now accepts collectionName to pass through to EnsureCollectionAsync
+    private async Task<T> ExecuteWithReinitAsync<T>(string collectionName, Func<CancellationToken, Task<T>> operation, CancellationToken ct)
     {
         try
         {
@@ -106,11 +118,11 @@ public class QdrantVectorStore : IVectorStore
         }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
         {
-            _logger.LogWarning("Qdrant collection '{Collection}' not found — reinitializing and retrying", _config.CollectionName);
+            _logger.LogWarning("Qdrant collection '{Collection}' not found — reinitializing and retrying", collectionName);
             await _initLock.WaitAsync(ct);
             try
             {
-                await EnsureCollectionAsync(ct);
+                await EnsureCollectionAsync(collectionName, ct);
             }
             finally
             {
@@ -121,7 +133,8 @@ public class QdrantVectorStore : IVectorStore
     }
 
     // Argha - 2026-03-02 - #5 - Void overload of ExecuteWithReinitAsync for methods that return Task
-    private async Task ExecuteWithReinitAsync(Func<CancellationToken, Task> operation, CancellationToken ct)
+    // Argha - 2026-03-04 - #17 - Now accepts collectionName to pass through to EnsureCollectionAsync
+    private async Task ExecuteWithReinitAsync(string collectionName, Func<CancellationToken, Task> operation, CancellationToken ct)
     {
         try
         {
@@ -129,11 +142,11 @@ public class QdrantVectorStore : IVectorStore
         }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
         {
-            _logger.LogWarning("Qdrant collection '{Collection}' not found — reinitializing and retrying", _config.CollectionName);
+            _logger.LogWarning("Qdrant collection '{Collection}' not found — reinitializing and retrying", collectionName);
             await _initLock.WaitAsync(ct);
             try
             {
-                await EnsureCollectionAsync(ct);
+                await EnsureCollectionAsync(collectionName, ct);
             }
             finally
             {
@@ -143,7 +156,8 @@ public class QdrantVectorStore : IVectorStore
         }
     }
 
-    public async Task UpsertChunksAsync(List<DocumentChunk> chunks, CancellationToken cancellationToken = default)
+    // Argha - 2026-03-04 - #17 - collectionName replaces _config.CollectionName for workspace isolation
+    public async Task UpsertChunksAsync(string collectionName, List<DocumentChunk> chunks, CancellationToken cancellationToken = default)
     {
         if (chunks.Count == 0) return;
 
@@ -176,20 +190,23 @@ public class QdrantVectorStore : IVectorStore
         try
         {
             await ExecuteWithReinitAsync(
-                ct => _client.UpsertAsync(_config.CollectionName, points, ct),
+                collectionName,
+                ct => _client.UpsertAsync(collectionName, points, ct),
                 cancellationToken);
 
-            _logger.LogDebug("Upserted {Count} chunks to Qdrant", chunks.Count);
+            _logger.LogDebug("Upserted {Count} chunks to Qdrant collection {CollectionName}", chunks.Count, collectionName);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to upsert chunks to Qdrant");
+            _logger.LogError(ex, "Failed to upsert chunks to Qdrant collection {CollectionName}", collectionName);
             throw;
         }
     }
 
     // Argha - 2026-02-19 - Added filterByTags; uses Must conditions per tag for AND semantics
+    // Argha - 2026-03-04 - #17 - collectionName replaces _config.CollectionName for workspace isolation
     public async Task<List<SearchResult>> SearchAsync(
+        string collectionName,
         float[] queryEmbedding,
         int topK = 5,
         Guid? filterByDocumentId = null,
@@ -201,7 +218,8 @@ public class QdrantVectorStore : IVectorStore
             var filter = BuildFilter(filterByDocumentId, filterByTags);
 
             var results = await ExecuteWithReinitAsync(
-                ct => _client.SearchAsync(_config.CollectionName, queryEmbedding, (ulong)topK, filter, payloadSelector: true, ct: ct),
+                collectionName,
+                ct => _client.SearchAsync(collectionName, queryEmbedding, (ulong)topK, filter, payloadSelector: true, ct: ct),
                 cancellationToken);
 
             return results.Select(r => new SearchResult
@@ -220,13 +238,15 @@ public class QdrantVectorStore : IVectorStore
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to search Qdrant");
+            _logger.LogError(ex, "Failed to search Qdrant collection {CollectionName}", collectionName);
             throw;
         }
     }
 
     // Argha - 2026-02-20 - Same as SearchAsync but requests vectors back for MMR re-ranking
+    // Argha - 2026-03-04 - #17 - collectionName replaces _config.CollectionName
     public async Task<List<SearchResult>> SearchWithEmbeddingsAsync(
+        string collectionName,
         float[] queryEmbedding,
         int topK = 5,
         Guid? filterByDocumentId = null,
@@ -239,7 +259,8 @@ public class QdrantVectorStore : IVectorStore
 
             // Argha - 2026-02-20 - Pass vectorsSelector: true so ScoredPoint.Vectors is populated
             var results = await ExecuteWithReinitAsync(
-                ct => _client.SearchAsync(_config.CollectionName, queryEmbedding, (ulong)topK, filter, payloadSelector: true, vectorsSelector: true, ct: ct),
+                collectionName,
+                ct => _client.SearchAsync(collectionName, queryEmbedding, (ulong)topK, filter, payloadSelector: true, vectorsSelector: true, ct: ct),
                 cancellationToken);
 
             return results.Select(r => new SearchResult
@@ -260,13 +281,15 @@ public class QdrantVectorStore : IVectorStore
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to search Qdrant with embeddings");
+            _logger.LogError(ex, "Failed to search Qdrant with embeddings in collection {CollectionName}", collectionName);
             throw;
         }
     }
 
     // Argha - 2026-02-20 - Full-text keyword search using Qdrant payload index
+    // Argha - 2026-03-04 - #17 - collectionName replaces _config.CollectionName
     public async Task<List<SearchResult>> KeywordSearchAsync(
+        string collectionName,
         string query,
         int topK = 5,
         Guid? filterByDocumentId = null,
@@ -321,7 +344,8 @@ public class QdrantVectorStore : IVectorStore
 
             // Argha - 2026-02-20 - ScrollAsync returns ScrollResponse protobuf; access results via .Result
             var scrollResponse = await ExecuteWithReinitAsync(
-                ct => _client.ScrollAsync(_config.CollectionName, filter, (uint)topK, payloadSelector: true, ct: ct),
+                collectionName,
+                ct => _client.ScrollAsync(collectionName, filter, (uint)topK, payloadSelector: true, ct: ct),
                 cancellationToken);
 
             return scrollResponse.Result.Select(r => new SearchResult
@@ -341,12 +365,13 @@ public class QdrantVectorStore : IVectorStore
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to perform keyword search in Qdrant");
+            _logger.LogError(ex, "Failed to perform keyword search in Qdrant collection {CollectionName}", collectionName);
             throw;
         }
     }
 
-    public async Task DeleteDocumentChunksAsync(Guid documentId, CancellationToken cancellationToken = default)
+    // Argha - 2026-03-04 - #17 - collectionName replaces _config.CollectionName
+    public async Task DeleteDocumentChunksAsync(string collectionName, Guid documentId, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -366,36 +391,39 @@ public class QdrantVectorStore : IVectorStore
             };
 
             await ExecuteWithReinitAsync(
-                ct => _client.DeleteAsync(_config.CollectionName, filter, ct),
+                collectionName,
+                ct => _client.DeleteAsync(collectionName, filter, ct),
                 cancellationToken);
 
-            _logger.LogDebug("Deleted chunks for document {DocumentId}", documentId);
+            _logger.LogDebug("Deleted chunks for document {DocumentId} from {CollectionName}", documentId, collectionName);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to delete document chunks from Qdrant");
+            _logger.LogError(ex, "Failed to delete document chunks from Qdrant collection {CollectionName}", collectionName);
             throw;
         }
     }
 
-    public async Task<VectorStoreStats> GetStatsAsync(CancellationToken cancellationToken = default)
+    // Argha - 2026-03-04 - #17 - collectionName replaces _config.CollectionName
+    public async Task<VectorStoreStats> GetStatsAsync(string collectionName, CancellationToken cancellationToken = default)
     {
         try
         {
             var info = await ExecuteWithReinitAsync(
-                ct => _client.GetCollectionInfoAsync(_config.CollectionName, ct),
+                collectionName,
+                ct => _client.GetCollectionInfoAsync(collectionName, ct),
                 cancellationToken);
 
             return new VectorStoreStats
             {
-                CollectionName = _config.CollectionName,
+                CollectionName = collectionName,
                 TotalVectors = (long)info.PointsCount,
                 VectorDimension = _embeddingService.EmbeddingDimension
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get Qdrant stats");
+            _logger.LogError(ex, "Failed to get Qdrant stats for collection {CollectionName}", collectionName);
             throw;
         }
     }

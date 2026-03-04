@@ -233,6 +233,19 @@ public class BatchUploadItemResultDto
     public string? ErrorMessage { get; set; }
 }
 
+// Argha - 2026-03-04 - #17 - Workspace DTOs for multi-tenancy endpoints
+
+/// <summary>Request body to create a new workspace</summary>
+public record CreateWorkspaceRequest(string Name);
+
+/// <summary>Workspace metadata (no API key field — plaintext never exposed after creation)</summary>
+public record WorkspaceDto(Guid Id, string Name, DateTime CreatedAt, string CollectionName);
+
+/// <summary>
+/// Returned only on POST /api/workspaces; ApiKey is the plaintext key shown once
+/// </summary>
+public record WorkspaceCreatedDto(Guid Id, string Name, DateTime CreatedAt, string CollectionName, string ApiKey);
+
 /// <summary>
 /// Response model for system health/stats
 /// </summary>

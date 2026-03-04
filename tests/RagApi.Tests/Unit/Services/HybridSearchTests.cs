@@ -33,12 +33,21 @@ public class HybridSearchTests
 
     private RagService CreateSut(SearchOptions? options = null)
     {
+        // Argha - 2026-03-04 - #17 - Provide workspace context with a fixed collection name
+        var workspaceContext = new Mock<IWorkspaceContext>();
+        workspaceContext.Setup(w => w.Current).Returns(new Workspace
+        {
+            Id = Workspace.DefaultWorkspaceId,
+            CollectionName = "documents"
+        });
+
         return new RagService(
             _vectorStoreMock.Object,
             _embeddingServiceMock.Object,
             _chatServiceMock.Object,
             _loggerMock.Object,
-            Options.Create(options ?? new SearchOptions()));
+            Options.Create(options ?? new SearchOptions()),
+            workspaceContext.Object);
     }
 
     [Fact]
@@ -50,18 +59,18 @@ public class HybridSearchTests
         var keywordResults = MakeResults(2, startScore: 1.0);
 
         _vectorStoreMock
-            .Setup(v => v.SearchAsync(TestEmbedding, 10, null, null, It.IsAny<CancellationToken>()))
+            .Setup(v => v.SearchAsync(It.IsAny<string>(), TestEmbedding, 10, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(semanticResults);
         _vectorStoreMock
-            .Setup(v => v.KeywordSearchAsync("test query", 10, null, null, It.IsAny<CancellationToken>()))
+            .Setup(v => v.KeywordSearchAsync(It.IsAny<string>(), "test query", 10, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(keywordResults);
 
         // Act
         await sut.SearchAsync("test query", topK: 5);
 
         // Assert
-        _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 10, null, null, It.IsAny<CancellationToken>()), Times.Once);
-        _vectorStoreMock.Verify(v => v.KeywordSearchAsync("test query", 10, null, null, It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.SearchAsync(It.IsAny<string>(), TestEmbedding, 10, null, null, It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.KeywordSearchAsync(It.IsAny<string>(), "test query", 10, null, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -70,15 +79,15 @@ public class HybridSearchTests
         // Arrange — UseHybridSearch defaults to false
         var sut = CreateSut();
         _vectorStoreMock
-            .Setup(v => v.SearchAsync(TestEmbedding, 5, null, null, It.IsAny<CancellationToken>()))
+            .Setup(v => v.SearchAsync(It.IsAny<string>(), TestEmbedding, 5, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(MakeResults(2));
 
         // Act
         await sut.SearchAsync("test query");
 
         // Assert
-        _vectorStoreMock.Verify(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()), Times.Once);
-        _vectorStoreMock.Verify(v => v.KeywordSearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()), Times.Never);
+        _vectorStoreMock.Verify(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.KeywordSearchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -87,17 +96,17 @@ public class HybridSearchTests
         // Arrange — config = false, request override = true
         var sut = CreateSut(new SearchOptions { UseHybridSearch = false, CandidateMultiplier = 1 });
         _vectorStoreMock
-            .Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+            .Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult>());
         _vectorStoreMock
-            .Setup(v => v.KeywordSearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+            .Setup(v => v.KeywordSearchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult>());
 
         // Act
         await sut.SearchAsync("query", useHybridSearch: true);
 
         // Assert
-        _vectorStoreMock.Verify(v => v.KeywordSearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.KeywordSearchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -106,14 +115,14 @@ public class HybridSearchTests
         // Arrange — config = true, request override = false
         var sut = CreateSut(new SearchOptions { UseHybridSearch = true });
         _vectorStoreMock
-            .Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+            .Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(MakeResults(2));
 
         // Act
         await sut.SearchAsync("query", useHybridSearch: false);
 
         // Assert
-        _vectorStoreMock.Verify(v => v.KeywordSearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()), Times.Never);
+        _vectorStoreMock.Verify(v => v.KeywordSearchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -124,10 +133,10 @@ public class HybridSearchTests
         var sharedChunk = new SearchResult { ChunkId = Guid.NewGuid(), DocumentId = Guid.NewGuid(), FileName = "a.txt", Content = "shared", Score = 0.9, ChunkIndex = 0 };
 
         _vectorStoreMock
-            .Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+            .Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult> { sharedChunk });
         _vectorStoreMock
-            .Setup(v => v.KeywordSearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+            .Setup(v => v.KeywordSearchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult> { sharedChunk });
 
         // Act
@@ -149,10 +158,10 @@ public class HybridSearchTests
         var chunkC = MakeResult("chunkC", score: 0.75); // rank 2 in semantic
 
         _vectorStoreMock
-            .Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+            .Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult> { chunkA, chunkB, chunkC });
         _vectorStoreMock
-            .Setup(v => v.KeywordSearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+            .Setup(v => v.KeywordSearchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult> { chunkB }); // chunkB in both lists → boosted
 
         // Act
@@ -172,18 +181,18 @@ public class HybridSearchTests
         var tags = new List<string> { "finance" };
 
         _vectorStoreMock
-            .Setup(v => v.SearchAsync(TestEmbedding, It.IsAny<int>(), docId, tags, It.IsAny<CancellationToken>()))
+            .Setup(v => v.SearchAsync(It.IsAny<string>(), TestEmbedding, It.IsAny<int>(), docId, tags, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult>());
         _vectorStoreMock
-            .Setup(v => v.KeywordSearchAsync("q", It.IsAny<int>(), docId, tags, It.IsAny<CancellationToken>()))
+            .Setup(v => v.KeywordSearchAsync(It.IsAny<string>(), "q", It.IsAny<int>(), docId, tags, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult>());
 
         // Act
         await sut.SearchAsync("q", filterByDocumentId: docId, filterByTags: tags);
 
         // Assert
-        _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, It.IsAny<int>(), docId, tags, It.IsAny<CancellationToken>()), Times.Once);
-        _vectorStoreMock.Verify(v => v.KeywordSearchAsync("q", It.IsAny<int>(), docId, tags, It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.SearchAsync(It.IsAny<string>(), TestEmbedding, It.IsAny<int>(), docId, tags, It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.KeywordSearchAsync(It.IsAny<string>(), "q", It.IsAny<int>(), docId, tags, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -193,10 +202,10 @@ public class HybridSearchTests
         var sut = CreateSut(new SearchOptions { UseHybridSearch = true, CandidateMultiplier = 1 });
 
         _vectorStoreMock
-            .Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+            .Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult>());
         _vectorStoreMock
-            .Setup(v => v.KeywordSearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+            .Setup(v => v.KeywordSearchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult>());
 
         // Act
@@ -214,10 +223,10 @@ public class HybridSearchTests
         var many = MakeResults(10);
 
         _vectorStoreMock
-            .Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+            .Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(many);
         _vectorStoreMock
-            .Setup(v => v.KeywordSearchAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+            .Setup(v => v.KeywordSearchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult>());
 
         // Act

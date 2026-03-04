@@ -9,6 +9,8 @@ internal interface IQdrantClient
     Task<IReadOnlyList<string>> ListCollectionsAsync(CancellationToken ct = default);
     Task CreateCollectionAsync(string name, VectorParams vectorParams, CancellationToken ct = default);
     Task CreatePayloadIndexAsync(string name, string field, PayloadSchemaType schema, CancellationToken ct = default);
+    // Argha - 2026-03-04 - #17 - Needed for workspace deletion cascade
+    Task DeleteCollectionAsync(string name, CancellationToken ct = default);
     Task UpsertAsync(string name, IReadOnlyList<PointStruct> points, CancellationToken ct = default);
     Task<IReadOnlyList<ScoredPoint>> SearchAsync(string name, float[] vector, ulong limit,
         Filter? filter = null, bool payloadSelector = false, bool vectorsSelector = false, CancellationToken ct = default);
@@ -32,6 +34,10 @@ internal sealed class QdrantClientAdapter : IQdrantClient
 
     public async Task CreatePayloadIndexAsync(string name, string field, PayloadSchemaType schema, CancellationToken ct = default)
         => await _client.CreatePayloadIndexAsync(collectionName: name, fieldName: field, schemaType: schema, cancellationToken: ct);
+
+    // Argha - 2026-03-04 - #17 - Delegates to QdrantClient.DeleteCollectionAsync
+    public async Task DeleteCollectionAsync(string name, CancellationToken ct = default)
+        => await _client.DeleteCollectionAsync(name, cancellationToken: ct);
 
     public async Task UpsertAsync(string name, IReadOnlyList<PointStruct> points, CancellationToken ct = default)
         => await _client.UpsertAsync(collectionName: name, points: points, cancellationToken: ct);

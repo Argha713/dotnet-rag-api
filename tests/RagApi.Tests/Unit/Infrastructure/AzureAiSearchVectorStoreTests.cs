@@ -45,17 +45,22 @@ public class AzureAiSearchVectorStoreTests
             }
         });
 
+        // Argha - 2026-03-04 - #17 - SearchClient no longer injected; AzureAiSearchVectorStore creates
+        // per-collection clients dynamically via SearchIndexClient.GetSearchClient(collectionName)
+        _indexClientMock
+            .Setup(c => c.GetSearchClient(It.IsAny<string>()))
+            .Returns(_searchClientMock.Object);
+
         _sut = new AzureAiSearchVectorStore(
             _indexClientMock.Object,
-            _searchClientMock.Object,
             _config,
             _loggerMock.Object);
     }
 
-    // ── InitializeAsync ────────────────────────────────────────────────────────
+    // ── EnsureCollectionAsync ──────────────────────────────────────────────────
 
     [Fact]
-    public async Task InitializeAsync_CallsCreateOrUpdateIndex()
+    public async Task EnsureCollectionAsync_CallsCreateOrUpdateIndex()
     {
         // Arrange
         _indexClientMock
@@ -68,7 +73,8 @@ public class AzureAiSearchVectorStoreTests
                 Response.FromValue(new SearchIndex("test-index"), Mock.Of<Response>())));
 
         // Act
-        await _sut.InitializeAsync();
+        // Argha - 2026-03-04 - #17 - InitializeAsync replaced by EnsureCollectionAsync(collectionName)
+        await _sut.EnsureCollectionAsync("test-index");
 
         // Assert
         _indexClientMock.Verify(c => c.CreateOrUpdateIndexAsync(
@@ -79,7 +85,7 @@ public class AzureAiSearchVectorStoreTests
     }
 
     [Fact]
-    public async Task InitializeAsync_IndexSchemaIncludesRequiredFields()
+    public async Task EnsureCollectionAsync_IndexSchemaIncludesRequiredFields()
     {
         // Arrange
         SearchIndex? capturedIndex = null;
@@ -96,7 +102,8 @@ public class AzureAiSearchVectorStoreTests
                 Response.FromValue(new SearchIndex("test-index"), Mock.Of<Response>())));
 
         // Act
-        await _sut.InitializeAsync();
+        // Argha - 2026-03-04 - #17 - InitializeAsync replaced by EnsureCollectionAsync(collectionName)
+        await _sut.EnsureCollectionAsync("test-index");
 
         // Assert
         capturedIndex.Should().NotBeNull();
@@ -112,7 +119,7 @@ public class AzureAiSearchVectorStoreTests
     public async Task UpsertChunksAsync_EmptyList_DoesNotCallSearchClient()
     {
         // Act
-        await _sut.UpsertChunksAsync(new List<DocumentChunk>());
+        await _sut.UpsertChunksAsync("test-index", new List<DocumentChunk>());
 
         // Assert
         _searchClientMock.Verify(
@@ -152,7 +159,7 @@ public class AzureAiSearchVectorStoreTests
             .Returns(Task.FromResult(Response.FromValue(indexResult, Mock.Of<Response>())));
 
         // Act
-        await _sut.UpsertChunksAsync(chunks);
+        await _sut.UpsertChunksAsync("test-index", chunks);
 
         // Assert
         _searchClientMock.Verify(
@@ -176,7 +183,7 @@ public class AzureAiSearchVectorStoreTests
             .Returns(Task.FromResult(Response.FromValue(fakeStats, Mock.Of<Response>())));
 
         // Act
-        var stats = await _sut.GetStatsAsync();
+        var stats = await _sut.GetStatsAsync("test-index");
 
         // Assert
         stats.CollectionName.Should().Be("test-index");
@@ -195,7 +202,7 @@ public class AzureAiSearchVectorStoreTests
             .Returns(Task.FromResult(Response.FromValue(fakeStats, Mock.Of<Response>())));
 
         // Act
-        var stats = await _sut.GetStatsAsync();
+        var stats = await _sut.GetStatsAsync("test-index");
 
         // Assert
         stats.CollectionName.Should().Be("test-index");
@@ -210,7 +217,7 @@ public class AzureAiSearchVectorStoreTests
         SetupEmptySearchResponse();
 
         // Act
-        var results = await _sut.SearchAsync(new float[] { 0.1f, 0.2f, 0.3f });
+        var results = await _sut.SearchAsync("test-index", new float[] { 0.1f, 0.2f, 0.3f });
 
         // Assert
         results.Should().BeEmpty();
@@ -224,7 +231,7 @@ public class AzureAiSearchVectorStoreTests
         SetupEmptySearchResponse(captureOptions: opts => capturedOptions = opts);
 
         // Act
-        await _sut.SearchAsync(new float[] { 0.1f, 0.2f, 0.3f }, topK: 7);
+        await _sut.SearchAsync("test-index", new float[] { 0.1f, 0.2f, 0.3f }, topK: 7);
 
         // Assert
         capturedOptions.Should().NotBeNull();
@@ -240,7 +247,7 @@ public class AzureAiSearchVectorStoreTests
         var docId = Guid.NewGuid();
 
         // Act
-        await _sut.SearchAsync(new float[] { 0.1f, 0.2f, 0.3f }, filterByDocumentId: docId);
+        await _sut.SearchAsync("test-index", new float[] { 0.1f, 0.2f, 0.3f }, filterByDocumentId: docId);
 
         // Assert
         capturedOptions!.Filter.Should().Contain(docId.ToString());
@@ -255,7 +262,7 @@ public class AzureAiSearchVectorStoreTests
         SetupEmptySearchResponse(captureOptions: opts => capturedOptions = opts);
 
         // Act
-        await _sut.SearchAsync(new float[] { 0.1f, 0.2f, 0.3f }, filterByTags: ["finance"]);
+        await _sut.SearchAsync("test-index", new float[] { 0.1f, 0.2f, 0.3f }, filterByTags: ["finance"]);
 
         // Assert
         capturedOptions!.Filter.Should().Contain("tags/any");
@@ -272,6 +279,7 @@ public class AzureAiSearchVectorStoreTests
 
         // Act
         await _sut.SearchAsync(
+            "test-index",
             new float[] { 0.1f, 0.2f, 0.3f },
             filterByDocumentId: docId,
             filterByTags: ["hr"]);
@@ -288,7 +296,7 @@ public class AzureAiSearchVectorStoreTests
         SetupEmptySearchResponse(captureOptions: opts => capturedOptions = opts);
 
         // Act
-        await _sut.SearchAsync(new float[] { 0.1f, 0.2f, 0.3f });
+        await _sut.SearchAsync("test-index", new float[] { 0.1f, 0.2f, 0.3f });
 
         // Assert
         capturedOptions!.Filter.Should().BeNullOrEmpty();
@@ -303,7 +311,7 @@ public class AzureAiSearchVectorStoreTests
         SetupEmptySearchResponse();
 
         // Act
-        var results = await _sut.SearchWithEmbeddingsAsync(new float[] { 0.1f, 0.2f, 0.3f });
+        var results = await _sut.SearchWithEmbeddingsAsync("test-index", new float[] { 0.1f, 0.2f, 0.3f });
 
         // Assert
         results.Should().BeEmpty();
@@ -317,7 +325,7 @@ public class AzureAiSearchVectorStoreTests
         SetupEmptySearchResponse(captureOptions: opts => capturedOptions = opts);
 
         // Act
-        await _sut.SearchWithEmbeddingsAsync(new float[] { 0.1f, 0.2f, 0.3f });
+        await _sut.SearchWithEmbeddingsAsync("test-index", new float[] { 0.1f, 0.2f, 0.3f });
 
         // Assert
         capturedOptions!.Select.Should().Contain("embedding");
@@ -332,7 +340,7 @@ public class AzureAiSearchVectorStoreTests
         SetupEmptySearchResponse();
 
         // Act
-        var results = await _sut.KeywordSearchAsync("test query");
+        var results = await _sut.KeywordSearchAsync("test-index", "test query");
 
         // Assert
         results.Should().BeEmpty();
@@ -346,7 +354,7 @@ public class AzureAiSearchVectorStoreTests
         SetupEmptySearchResponse(captureOptions: opts => capturedOptions = opts);
 
         // Act
-        await _sut.KeywordSearchAsync("invoice", filterByTags: ["legal"]);
+        await _sut.KeywordSearchAsync("test-index", "invoice", filterByTags: ["legal"]);
 
         // Assert
         capturedOptions!.Filter.Should().Contain("tags/any");
@@ -361,7 +369,7 @@ public class AzureAiSearchVectorStoreTests
         SetupEmptySearchResponse(captureOptions: opts => capturedOptions = opts);
 
         // Act
-        await _sut.KeywordSearchAsync("test query");
+        await _sut.KeywordSearchAsync("test-index", "test query");
 
         // Assert
         // Argha - 2026-02-21 - keyword search must not include a VectorSearch query (BM25 only)
@@ -377,7 +385,7 @@ public class AzureAiSearchVectorStoreTests
         SetupEmptySearchResponse();
 
         // Act
-        await _sut.DeleteDocumentChunksAsync(Guid.NewGuid());
+        await _sut.DeleteDocumentChunksAsync("test-index", Guid.NewGuid());
 
         // Assert — IndexDocumentsAsync must not be called if nothing was found
         _searchClientMock.Verify(

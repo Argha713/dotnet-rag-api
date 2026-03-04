@@ -17,8 +17,12 @@ public class Document
     // Argha - 2026-02-19 - JSON array of tags for metadata filtering
     public string TagsJson { get; set; } = "[]";
 
-    // Argha - 2026-02-21 - Timestamp of last re-process; null for documents never updated 
+    // Argha - 2026-02-21 - Timestamp of last re-process; null for documents never updated
     public DateTime? UpdatedAt { get; set; }
+
+    // Argha - 2026-03-04 - #17 - FK to Workspaces; all document operations are scoped by workspace
+    public Guid WorkspaceId { get; set; }
+    public Workspace? Workspace { get; set; }
 }
 
 public enum DocumentStatus

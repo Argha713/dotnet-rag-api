@@ -32,15 +32,25 @@ public class DocumentsControllerTests
         _processorMock.Setup(p => p.IsSupported("text/plain")).Returns(true);
         _processorMock.Setup(p => p.SupportedContentTypes).Returns(new[] { "text/plain", "application/pdf" });
 
+        // Argha - 2026-03-04 - #17 - Provide workspace context with a fixed collection name
+        var workspaceContext = new Mock<IWorkspaceContext>();
+        workspaceContext.Setup(w => w.Current).Returns(new Workspace
+        {
+            Id = Workspace.DefaultWorkspaceId,
+            CollectionName = "documents"
+        });
+
         // Argha - 2026-02-15 - Use real DocumentService with mocked dependencies since it's a concrete class
-        // Argha - 2026-02-20 - Pass default DocumentProcessingOptions 
+        // Argha - 2026-02-20 - Pass default DocumentProcessingOptions
+        // Argha - 2026-03-04 - #17 - Pass workspace context for per-request collection name
         var documentService = new DocumentService(
             _processorMock.Object,
             _embeddingMock.Object,
             _vectorStoreMock.Object,
             Mock.Of<ILogger<DocumentService>>(),
             _repositoryMock.Object,
-            Options.Create(new DocumentProcessingOptions()));
+            Options.Create(new DocumentProcessingOptions()),
+            workspaceContext.Object);
 
         // Argha - 2026-02-21 - Pass default BatchUploadOptions to satisfy new constructor parameter 
         _sut = new DocumentsController(documentService, Options.Create(new BatchUploadOptions()));
@@ -164,7 +174,7 @@ public class DocumentsControllerTests
 
         // Assert
         result.Should().BeOfType<NoContentResult>();
-        _vectorStoreMock.Verify(v => v.DeleteDocumentChunksAsync(docId, It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.DeleteDocumentChunksAsync(It.IsAny<string>(), docId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

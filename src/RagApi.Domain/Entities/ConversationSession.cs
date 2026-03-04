@@ -20,4 +20,8 @@ public class ConversationSession
     /// JSON-serialized List&lt;ChatMessage&gt; — deserialized by ConversationRepository
     /// </summary>
     public string MessagesJson { get; set; } = "[]";
+
+    // Argha - 2026-03-04 - #17 - FK to Workspaces; all session operations are scoped by workspace
+    public Guid WorkspaceId { get; set; }
+    public Workspace? Workspace { get; set; }
 }

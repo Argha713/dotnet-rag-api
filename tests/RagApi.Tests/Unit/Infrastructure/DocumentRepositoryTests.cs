@@ -1,5 +1,7 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Moq;
+using RagApi.Application.Interfaces;
 using RagApi.Domain.Entities;
 using RagApi.Infrastructure.Data;
 
@@ -11,6 +13,10 @@ public class DocumentRepositoryTests : IDisposable
     private readonly RagApiDbContext _dbContext;
     private readonly DocumentRepository _sut;
 
+    // Argha - 2026-03-04 - #17 - Use Guid.Empty as workspace ID so documents added directly via
+    // _dbContext.Documents.Add() (which have WorkspaceId=Guid.Empty by default) pass the filter
+    private static readonly Guid TestWorkspaceId = Guid.Empty;
+
     public DocumentRepositoryTests()
     {
         var options = new DbContextOptionsBuilder<RagApiDbContext>()
@@ -18,7 +24,16 @@ public class DocumentRepositoryTests : IDisposable
             .Options;
 
         _dbContext = new RagApiDbContext(options);
-        _sut = new DocumentRepository(_dbContext);
+
+        // Argha - 2026-03-04 - #17 - Provide workspace context so DocumentRepository can scope queries
+        var workspaceContext = new Mock<IWorkspaceContext>();
+        workspaceContext.Setup(w => w.Current).Returns(new Workspace
+        {
+            Id = TestWorkspaceId,
+            CollectionName = "documents"
+        });
+
+        _sut = new DocumentRepository(_dbContext, workspaceContext.Object);
     }
 
     public void Dispose()
@@ -136,12 +151,15 @@ public class DocumentRepositoryTests : IDisposable
 
     private static Document CreateDocument(string fileName)
     {
+        // Argha - 2026-03-04 - #17 - Set WorkspaceId to match the mock workspace so the
+        // workspace-scoped filter in GetByIdAsync/GetAllAsync/DeleteAsync finds these documents
         return new Document
         {
             FileName = fileName,
             ContentType = "text/plain",
             FileSize = 100,
-            Status = DocumentStatus.Processing
+            Status = DocumentStatus.Processing,
+            WorkspaceId = TestWorkspaceId
         };
     }
 }

@@ -16,8 +16,10 @@ public class RagService
     private readonly IEmbeddingService _embeddingService;
     private readonly IChatService _chatService;
     private readonly ILogger<RagService> _logger;
-    // Argha - 2026-02-20 - SearchOptions for hybrid search config 
+    // Argha - 2026-02-20 - SearchOptions for hybrid search config
     private readonly SearchOptions _searchOptions;
+    // Argha - 2026-03-04 - #17 - Workspace context provides the collection name for this request
+    private readonly IWorkspaceContext _workspaceContext;
 
     private const string SystemPromptTemplate = @"You are a helpful AI assistant that answers questions based on the provided context.
 Use ONLY the information from the context below to answer the question. If the context doesn't contain enough information to answer the question, say so clearly.
@@ -33,19 +35,22 @@ Context from documents:
 
 Remember: Only use information from the context above. Do not make up information.";
 
-    // Argha - 2026-02-20 - Added IOptions<SearchOptions> for hybrid search 
+    // Argha - 2026-02-20 - Added IOptions<SearchOptions> for hybrid search
+    // Argha - 2026-03-04 - #17 - Added IWorkspaceContext for per-request collection name
     public RagService(
         IVectorStore vectorStore,
         IEmbeddingService embeddingService,
         IChatService chatService,
         ILogger<RagService> logger,
-        IOptions<SearchOptions> searchOptions)
+        IOptions<SearchOptions> searchOptions,
+        IWorkspaceContext workspaceContext)
     {
         _vectorStore = vectorStore;
         _embeddingService = embeddingService;
         _chatService = chatService;
         _logger = logger;
         _searchOptions = searchOptions.Value;
+        _workspaceContext = workspaceContext;
     }
 
     /// <summary>
@@ -205,7 +210,8 @@ Remember: Only use information from the context above. Do not make up informatio
             cancellationToken);
     }
 
-    // Argha - 2026-02-20 - Unified retrieval entry point: semantic-only or hybrid + optional MMR re-ranking 
+    // Argha - 2026-02-20 - Unified retrieval entry point: semantic-only or hybrid + optional MMR re-ranking
+    // Argha - 2026-03-04 - #17 - Uses _workspaceContext.Current.CollectionName for tenant isolation
     private async Task<List<SearchResult>> RetrieveChunksAsync(
         string query,
         float[] queryEmbedding,
@@ -216,6 +222,9 @@ Remember: Only use information from the context above. Do not make up informatio
         bool useReRanking,
         CancellationToken cancellationToken)
     {
+        // Argha - 2026-03-04 - #17 - Collection name is workspace-specific
+        var collectionName = _workspaceContext.Current.CollectionName;
+
         // Argha - 2026-02-20 - Expand candidate count when hybrid (good fusion needs more candidates from each list)
         //                     or when re-ranking (MMR needs more candidates to diversify from).
         var candidateCount = (useHybrid || useReRanking)
@@ -226,24 +235,24 @@ Remember: Only use information from the context above. Do not make up informatio
 
         if (!useHybrid)
         {
-            // Argha - 2026-02-20 - Use SearchWithEmbeddingsAsync when re-ranking is requested 
+            // Argha - 2026-02-20 - Use SearchWithEmbeddingsAsync when re-ranking is requested
             candidates = useReRanking
                 ? await _vectorStore.SearchWithEmbeddingsAsync(
-                    queryEmbedding, candidateCount, filterByDocumentId, filterByTags, cancellationToken)
+                    collectionName, queryEmbedding, candidateCount, filterByDocumentId, filterByTags, cancellationToken)
                 : await _vectorStore.SearchAsync(
-                    queryEmbedding, topK, filterByDocumentId, filterByTags, cancellationToken);
+                    collectionName, queryEmbedding, topK, filterByDocumentId, filterByTags, cancellationToken);
         }
         else
         {
-            // Argha - 2026-02-20 - Hybrid: run semantic + keyword in parallel with expanded candidates 
+            // Argha - 2026-02-20 - Hybrid: run semantic + keyword in parallel with expanded candidates
             var semanticTask = useReRanking
                 ? _vectorStore.SearchWithEmbeddingsAsync(
-                    queryEmbedding, candidateCount, filterByDocumentId, filterByTags, cancellationToken)
+                    collectionName, queryEmbedding, candidateCount, filterByDocumentId, filterByTags, cancellationToken)
                 : _vectorStore.SearchAsync(
-                    queryEmbedding, candidateCount, filterByDocumentId, filterByTags, cancellationToken);
+                    collectionName, queryEmbedding, candidateCount, filterByDocumentId, filterByTags, cancellationToken);
 
             var keywordTask = _vectorStore.KeywordSearchAsync(
-                query, candidateCount, filterByDocumentId, filterByTags, cancellationToken);
+                collectionName, query, candidateCount, filterByDocumentId, filterByTags, cancellationToken);
 
             await Task.WhenAll(semanticTask, keywordTask);
 

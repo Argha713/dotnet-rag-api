@@ -28,8 +28,12 @@ public class DocumentService
     // Argha - 2026-02-21 - Batch upload options for concurrency and file count limits 
     private readonly BatchUploadOptions _batchOptions;
 
+    // Argha - 2026-03-04 - #17 - Workspace context provides the collection name for vector store isolation
+    private readonly IWorkspaceContext _workspaceContext;
+
     // Argha - 2026-02-20 - Added IOptions<DocumentProcessingOptions> for configurable chunking
-    // Argha - 2026-02-21 - Added IOptions<BatchUploadOptions> for batch upload settings 
+    // Argha - 2026-02-21 - Added IOptions<BatchUploadOptions> for batch upload settings
+    // Argha - 2026-03-04 - #17 - Added IWorkspaceContext for per-request collection name
     public DocumentService(
         IDocumentProcessor documentProcessor,
         IEmbeddingService embeddingService,
@@ -37,6 +41,7 @@ public class DocumentService
         ILogger<DocumentService> logger,
         IDocumentRepository documentRepository,
         IOptions<DocumentProcessingOptions> processingOptions,
+        IWorkspaceContext workspaceContext,
         IOptions<BatchUploadOptions>? batchOptions = null)
     {
         _documentProcessor = documentProcessor;
@@ -45,6 +50,7 @@ public class DocumentService
         _logger = logger;
         _documentRepository = documentRepository;
         _processingOptions = processingOptions.Value;
+        _workspaceContext = workspaceContext;
         // Argha - 2026-02-21 - Optional to avoid breaking existing test constructors that don't pass it
         _batchOptions = batchOptions?.Value ?? new BatchUploadOptions();
     }
@@ -126,7 +132,8 @@ public class DocumentService
             }
 
             // Step 4: Store chunks in vector database
-            await _vectorStore.UpsertChunksAsync(chunks, cancellationToken);
+            // Argha - 2026-03-04 - #17 - Use workspace's collection name for tenant isolation
+            await _vectorStore.UpsertChunksAsync(_workspaceContext.Current.CollectionName, chunks, cancellationToken);
 
             // Update document status
             document.Status = DocumentStatus.Completed;
@@ -190,7 +197,8 @@ public class DocumentService
         {
             // Step 1: Remove old vectors so stale chunks don't remain in the index
             _logger.LogDebug("Deleting old chunks for document {DocumentId}", documentId);
-            await _vectorStore.DeleteDocumentChunksAsync(documentId, cancellationToken);
+            // Argha - 2026-03-04 - #17 - Use workspace's collection name for tenant isolation
+            await _vectorStore.DeleteDocumentChunksAsync(_workspaceContext.Current.CollectionName, documentId, cancellationToken);
 
             // Step 2: Extract text from the new file
             _logger.LogDebug("Extracting text from updated document {DocumentId}", documentId);
@@ -232,7 +240,8 @@ public class DocumentService
             }
 
             // Step 5: Store new chunks
-            await _vectorStore.UpsertChunksAsync(chunks, cancellationToken);
+            // Argha - 2026-03-04 - #17 - Use workspace's collection name for tenant isolation
+            await _vectorStore.UpsertChunksAsync(_workspaceContext.Current.CollectionName, chunks, cancellationToken);
 
             // Step 6: Persist updated metadata
             document.FileName = fileName;
@@ -300,7 +309,8 @@ public class DocumentService
         _logger.LogInformation("Deleting document {DocumentId}", documentId);
 
         // Remove chunks from vector store
-        await _vectorStore.DeleteDocumentChunksAsync(documentId, cancellationToken);
+        // Argha - 2026-03-04 - #17 - Use workspace's collection name for tenant isolation
+        await _vectorStore.DeleteDocumentChunksAsync(_workspaceContext.Current.CollectionName, documentId, cancellationToken);
 
         // Argha - 2026-02-15 - Commented out: was in-memory removal 
         // _documents.TryRemove(documentId, out _);

@@ -2,16 +2,20 @@ using System.Text.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Moq;
 using RagApi.Api.Middleware;
+using RagApi.Application.Interfaces;
+using RagApi.Domain.Entities;
 
 namespace RagApi.Tests.Unit.Middleware;
 
-// Argha - 2026-02-20 - Unit tests for ApiKeyMiddleware 
+// Argha - 2026-02-20 - Unit tests for ApiKeyMiddleware
 public class ApiKeyMiddlewareTests
 {
     private const string ValidKey = "test-api-key-123";
 
-    // Argha - 2026-02-20 - Helper: build IConfiguration with a given ApiKey value 
+    // Argha - 2026-02-20 - Helper: build IConfiguration with a given ApiKey value
     private static IConfiguration BuildConfig(string? apiKey) =>
         new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -31,6 +35,22 @@ public class ApiKeyMiddlewareTests
 
         if (providedKey is not null)
             context.Request.Headers["X-Api-Key"] = providedKey;
+
+        // Argha - 2026-03-04 - #17 - Middleware now resolves IWorkspaceContext and IWorkspaceRepository
+        // from RequestServices; supply mocked services so tests remain self-contained
+        var workspaceContextMock = new Mock<IWorkspaceContext>();
+        var workspaceRepoMock = new Mock<IWorkspaceRepository>();
+        workspaceRepoMock
+            .Setup(r => r.GetByApiKeyHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Workspace?)null);
+        workspaceRepoMock
+            .Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Workspace?)null); // triggers CreateFallbackWorkspace in middleware
+
+        var services = new ServiceCollection();
+        services.AddSingleton(workspaceContextMock.Object);
+        services.AddSingleton(workspaceRepoMock.Object);
+        context.RequestServices = services.BuildServiceProvider();
 
         RequestDelegate next = ctx =>
         {

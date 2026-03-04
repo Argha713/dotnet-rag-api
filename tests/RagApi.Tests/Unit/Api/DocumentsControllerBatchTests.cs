@@ -33,6 +33,14 @@ public class DocumentsControllerBatchTests
         _processorMock.Setup(p => p.SupportedContentTypes)
             .Returns(new[] { "text/plain", "application/pdf" });
 
+        // Argha - 2026-03-04 - #17 - Provide workspace context with a fixed collection name
+        var workspaceContext = new Mock<IWorkspaceContext>();
+        workspaceContext.Setup(w => w.Current).Returns(new Workspace
+        {
+            Id = Workspace.DefaultWorkspaceId,
+            CollectionName = "documents"
+        });
+
         var documentService = new DocumentService(
             _processorMock.Object,
             _embeddingMock.Object,
@@ -40,6 +48,7 @@ public class DocumentsControllerBatchTests
             Mock.Of<ILogger<DocumentService>>(),
             _repositoryMock.Object,
             Options.Create(new DocumentProcessingOptions()),
+            workspaceContext.Object,
             Options.Create(new BatchUploadOptions { MaxConcurrency = 2, MaxFilesPerBatch = 5 }));
 
         _sut = new DocumentsController(
@@ -273,7 +282,7 @@ public class DocumentsControllerBatchTests
             .Returns(Task.CompletedTask);
 
         _vectorStoreMock
-            .Setup(v => v.UpsertChunksAsync(It.IsAny<List<DocumentChunk>>(), It.IsAny<CancellationToken>()))
+            .Setup(v => v.UpsertChunksAsync(It.IsAny<string>(), It.IsAny<List<DocumentChunk>>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
     }
 

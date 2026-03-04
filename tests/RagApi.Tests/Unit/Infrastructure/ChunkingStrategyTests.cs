@@ -165,7 +165,8 @@ public class ChunkingStrategyTests
             Mock.Of<IVectorStore>(),
             Mock.Of<ILogger<DocumentService>>(),
             Mock.Of<IDocumentRepository>(),
-            Options.Create(new DocumentProcessingOptions()));
+            Options.Create(new DocumentProcessingOptions()),
+            Mock.Of<IWorkspaceContext>());
 
         // Argha - 2026-02-21 - Pass default BatchUploadOptions to satisfy new constructor parameter 
         var controller = new DocumentsController(documentService, Options.Create(new BatchUploadOptions()));

@@ -19,6 +19,9 @@ public class DocumentServiceTests
     private readonly Mock<IDocumentRepository> _repositoryMock;
     private readonly DocumentService _sut;
 
+    // Argha - 2026-03-04 - #17 - Default collection name used by all test workspace contexts
+    private const string TestCollection = "documents";
+
     public DocumentServiceTests()
     {
         _processorMock = new Mock<IDocumentProcessor>();
@@ -30,14 +33,24 @@ public class DocumentServiceTests
         _processorMock.Setup(p => p.IsSupported("text/plain")).Returns(true);
         _processorMock.Setup(p => p.SupportedContentTypes).Returns(new[] { "text/plain", "application/pdf" });
 
-        // Argha - 2026-02-20 - Pass default DocumentProcessingOptions 
+        // Argha - 2026-03-04 - #17 - Provide workspace context with a fixed collection name
+        var workspaceContext = new Mock<IWorkspaceContext>();
+        workspaceContext.Setup(w => w.Current).Returns(new Workspace
+        {
+            Id = Workspace.DefaultWorkspaceId,
+            CollectionName = TestCollection
+        });
+
+        // Argha - 2026-02-20 - Pass default DocumentProcessingOptions
+        // Argha - 2026-03-04 - #17 - Pass workspace context for per-request collection name
         _sut = new DocumentService(
             _processorMock.Object,
             _embeddingMock.Object,
             _vectorStoreMock.Object,
             _loggerMock.Object,
             _repositoryMock.Object,
-            Options.Create(new DocumentProcessingOptions()));
+            Options.Create(new DocumentProcessingOptions()),
+            workspaceContext.Object);
     }
 
     [Fact]
@@ -112,7 +125,7 @@ public class DocumentServiceTests
         _processorMock.Verify(p => p.ExtractTextAsync(It.IsAny<Stream>(), "text/plain", It.IsAny<CancellationToken>()), Times.Once);
         _processorMock.Verify(p => p.ChunkText(It.IsAny<Guid>(), "Some text content", It.IsAny<ChunkingOptions?>()), Times.Once);
         _embeddingMock.Verify(e => e.GenerateEmbeddingsAsync(It.Is<List<string>>(l => l.Count == 2), It.IsAny<CancellationToken>()), Times.Once);
-        _vectorStoreMock.Verify(v => v.UpsertChunksAsync(chunks, It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.UpsertChunksAsync(It.IsAny<string>(), chunks, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -206,7 +219,7 @@ public class DocumentServiceTests
         await _sut.DeleteDocumentAsync(docId);
 
         // Assert
-        _vectorStoreMock.Verify(v => v.DeleteDocumentChunksAsync(docId, It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.DeleteDocumentChunksAsync(It.IsAny<string>(), docId, It.IsAny<CancellationToken>()), Times.Once);
         _repositoryMock.Verify(r => r.DeleteAsync(docId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -244,8 +257,8 @@ public class DocumentServiceTests
             .Returns(chunks);
         _embeddingMock.Setup(e => e.GenerateEmbeddingsAsync(It.IsAny<List<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<float[]> { new float[768] });
-        _vectorStoreMock.Setup(v => v.UpsertChunksAsync(It.IsAny<List<DocumentChunk>>(), It.IsAny<CancellationToken>()))
-            .Callback<List<DocumentChunk>, CancellationToken>((c, _) => capturedChunks.AddRange(c))
+        _vectorStoreMock.Setup(v => v.UpsertChunksAsync(It.IsAny<string>(), It.IsAny<List<DocumentChunk>>(), It.IsAny<CancellationToken>()))
+            .Callback<string, List<DocumentChunk>, CancellationToken>((_, c, _) => capturedChunks.AddRange(c))
             .Returns(Task.CompletedTask);
         using var stream = new MemoryStream();
 
@@ -343,8 +356,8 @@ public class DocumentServiceTests
         await _sut.UpdateDocumentAsync(docId, stream, "updated.txt", "text/plain");
 
         // Assert
-        _vectorStoreMock.Verify(v => v.DeleteDocumentChunksAsync(docId, It.IsAny<CancellationToken>()), Times.Once);
-        _vectorStoreMock.Verify(v => v.UpsertChunksAsync(It.IsAny<List<DocumentChunk>>(), It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.DeleteDocumentChunksAsync(It.IsAny<string>(), docId, It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.UpsertChunksAsync(It.IsAny<string>(), It.IsAny<List<DocumentChunk>>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

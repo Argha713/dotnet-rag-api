@@ -35,15 +35,25 @@ public class SystemControllerTests
 
         var aiConfig = Options.Create(new AiConfiguration { Provider = "Ollama" });
 
+        // Argha - 2026-03-04 - #17 - Provide workspace context with a fixed collection name
+        var workspaceContext = new Mock<IWorkspaceContext>();
+        workspaceContext.Setup(w => w.Current).Returns(new Workspace
+        {
+            Id = Workspace.DefaultWorkspaceId,
+            CollectionName = "documents"
+        });
+
         // Argha - 2026-02-15 - Use real DocumentService with mocked dependencies since it's a concrete class
-        // Argha - 2026-02-20 - Pass default DocumentProcessingOptions 
+        // Argha - 2026-02-20 - Pass default DocumentProcessingOptions
+        // Argha - 2026-03-04 - #17 - Pass workspace context for per-request collection name
         var documentService = new DocumentService(
             Mock.Of<IDocumentProcessor>(),
             _embeddingMock.Object,
             _vectorStoreMock.Object,
             Mock.Of<ILogger<DocumentService>>(),
             _repositoryMock.Object,
-            Options.Create(new DocumentProcessingOptions()));
+            Options.Create(new DocumentProcessingOptions()),
+            workspaceContext.Object);
 
         _sut = new SystemController(
             _vectorStoreMock.Object,
@@ -51,14 +61,15 @@ public class SystemControllerTests
             _chatMock.Object,
             documentService,
             aiConfig,
-            Mock.Of<ILogger<SystemController>>());
+            Mock.Of<ILogger<SystemController>>(),
+            workspaceContext.Object);
     }
 
     [Fact]
     public async Task GetStats_Returns200WithStats()
     {
         // Arrange
-        _vectorStoreMock.Setup(v => v.GetStatsAsync(It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.GetStatsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new VectorStoreStats { TotalVectors = 42, CollectionName = "documents" });
         _repositoryMock.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Document> { new(), new(), new() });
@@ -81,7 +92,7 @@ public class SystemControllerTests
     public async Task GetStats_VectorStoreFailure_ReturnsPartialStats()
     {
         // Arrange
-        _vectorStoreMock.Setup(v => v.GetStatsAsync(It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.GetStatsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("Qdrant unreachable"));
         _repositoryMock.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Document>());
@@ -100,7 +111,7 @@ public class SystemControllerTests
     public async Task GetStats_IncludesProviderInfo()
     {
         // Arrange
-        _vectorStoreMock.Setup(v => v.GetStatsAsync(It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.GetStatsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new VectorStoreStats());
         _repositoryMock.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Document>());

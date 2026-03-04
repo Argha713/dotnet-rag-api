@@ -1,4 +1,4 @@
-// Argha - 2026-02-21 - Azure AI Search IVectorStore implementation 
+// Argha - 2026-02-21 - Azure AI Search IVectorStore implementation
 using Azure;
 using Azure.Search.Documents;
 using Azure.Search.Documents.Indexes;
@@ -31,61 +31,82 @@ public class AzureAiSearchVectorStore : IVectorStore
     private const string FieldEmbedding = "embedding";
 
     private readonly SearchIndexClient _indexClient;
-    private readonly SearchClient _searchClient;
     private readonly AzureAiSearchSettings _settings;
     private readonly ILogger<AzureAiSearchVectorStore> _logger;
 
     public AzureAiSearchVectorStore(
         SearchIndexClient indexClient,
-        SearchClient searchClient,
         IOptions<VectorStoreConfiguration> config,
         ILogger<AzureAiSearchVectorStore> logger)
     {
         _indexClient = indexClient;
-        _searchClient = searchClient;
         _settings = config.Value.AzureAiSearch;
         _logger = logger;
     }
 
-    // ── InitializeAsync ────────────────────────────────────────────────────────
+    // ── EnsureCollectionAsync ──────────────────────────────────────────────────
 
-    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    // Argha - 2026-03-04 - #17 - collectionName is used as the Azure Search index name
+    public async Task EnsureCollectionAsync(string collectionName, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation(
             "Ensuring Azure AI Search index '{IndexName}' exists with dimension {Dim}",
-            _settings.IndexName, _settings.EmbeddingDimension);
+            collectionName, _settings.EmbeddingDimension);
 
-        var index = BuildIndexDefinition();
+        var index = BuildIndexDefinition(collectionName);
         await _indexClient.CreateOrUpdateIndexAsync(index, cancellationToken: cancellationToken);
 
-        _logger.LogInformation("Azure AI Search index ready: {IndexName}", _settings.IndexName);
+        _logger.LogInformation("Azure AI Search index ready: {IndexName}", collectionName);
+    }
+
+    // ── DeleteCollectionAsync ──────────────────────────────────────────────────
+
+    // Argha - 2026-03-04 - #17 - Delete the Azure AI Search index for workspace deletion cascade
+    public async Task DeleteCollectionAsync(string collectionName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _indexClient.DeleteIndexAsync(collectionName, cancellationToken);
+            _logger.LogInformation("Deleted Azure AI Search index: {IndexName}", collectionName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete Azure AI Search index {IndexName}", collectionName);
+            throw;
+        }
     }
 
     // ── UpsertChunksAsync ──────────────────────────────────────────────────────
 
+    // Argha - 2026-03-04 - #17 - collectionName used as index name
     public async Task UpsertChunksAsync(
+        string collectionName,
         List<DocumentChunk> chunks,
         CancellationToken cancellationToken = default)
     {
         if (chunks.Count == 0)
             return;
 
+        var searchClient = _indexClient.GetSearchClient(collectionName);
         var documents = chunks.Select(MapChunkToDocument).ToList();
         var batch = IndexDocumentsBatch.MergeOrUpload(documents);
-        await _searchClient.IndexDocumentsAsync(batch, cancellationToken: cancellationToken);
+        await searchClient.IndexDocumentsAsync(batch, cancellationToken: cancellationToken);
 
-        _logger.LogDebug("Upserted {Count} chunks to Azure AI Search", chunks.Count);
+        _logger.LogDebug("Upserted {Count} chunks to Azure AI Search index {IndexName}", chunks.Count, collectionName);
     }
 
     // ── SearchAsync ────────────────────────────────────────────────────────────
 
+    // Argha - 2026-03-04 - #17 - collectionName used as index name
     public async Task<List<SearchResult>> SearchAsync(
+        string collectionName,
         float[] queryEmbedding,
         int topK = 5,
         Guid? filterByDocumentId = null,
         List<string>? filterByTags = null,
         CancellationToken cancellationToken = default)
     {
+        var searchClient = _indexClient.GetSearchClient(collectionName);
         var options = BuildVectorSearchOptions(
             topK,
             filterByDocumentId,
@@ -94,7 +115,7 @@ public class AzureAiSearchVectorStore : IVectorStore
             queryEmbedding);
 
         // Argha - 2026-02-21 - Empty string triggers vector-only search (no BM25 scoring)
-        var response = await _searchClient.SearchAsync<SearchDocument>(
+        var response = await searchClient.SearchAsync<SearchDocument>(
             searchText: string.Empty,
             options,
             cancellationToken);
@@ -104,13 +125,16 @@ public class AzureAiSearchVectorStore : IVectorStore
 
     // ── SearchWithEmbeddingsAsync ──────────────────────────────────────────────
 
+    // Argha - 2026-03-04 - #17 - collectionName used as index name
     public async Task<List<SearchResult>> SearchWithEmbeddingsAsync(
+        string collectionName,
         float[] queryEmbedding,
         int topK = 5,
         Guid? filterByDocumentId = null,
         List<string>? filterByTags = null,
         CancellationToken cancellationToken = default)
     {
+        var searchClient = _indexClient.GetSearchClient(collectionName);
         var options = BuildVectorSearchOptions(
             topK,
             filterByDocumentId,
@@ -118,7 +142,7 @@ public class AzureAiSearchVectorStore : IVectorStore
             includeEmbedding: true,
             queryEmbedding);
 
-        var response = await _searchClient.SearchAsync<SearchDocument>(
+        var response = await searchClient.SearchAsync<SearchDocument>(
             searchText: string.Empty,
             options,
             cancellationToken);
@@ -128,13 +152,16 @@ public class AzureAiSearchVectorStore : IVectorStore
 
     // ── KeywordSearchAsync ─────────────────────────────────────────────────────
 
+    // Argha - 2026-03-04 - #17 - collectionName used as index name
     public async Task<List<SearchResult>> KeywordSearchAsync(
+        string collectionName,
         string query,
         int topK = 5,
         Guid? filterByDocumentId = null,
         List<string>? filterByTags = null,
         CancellationToken cancellationToken = default)
     {
+        var searchClient = _indexClient.GetSearchClient(collectionName);
         // Argha - 2026-02-21 - BM25 text query; Score = 1.0 per IVectorStore interface contract (RRF caller re-ranks)
         var options = new SearchOptions
         {
@@ -148,7 +175,7 @@ public class AzureAiSearchVectorStore : IVectorStore
         options.Select.Add(FieldChunkIndex);
         options.Select.Add(FieldContentType);
 
-        var response = await _searchClient.SearchAsync<SearchDocument>(
+        var response = await searchClient.SearchAsync<SearchDocument>(
             searchText: query,
             options,
             cancellationToken);
@@ -165,10 +192,13 @@ public class AzureAiSearchVectorStore : IVectorStore
 
     // ── DeleteDocumentChunksAsync ──────────────────────────────────────────────
 
+    // Argha - 2026-03-04 - #17 - collectionName used as index name
     public async Task DeleteDocumentChunksAsync(
+        string collectionName,
         Guid documentId,
         CancellationToken cancellationToken = default)
     {
+        var searchClient = _indexClient.GetSearchClient(collectionName);
         // Argha - 2026-02-21 - Fetch all chunk IDs for the document, then delete in one batch
         var options = new SearchOptions
         {
@@ -177,7 +207,7 @@ public class AzureAiSearchVectorStore : IVectorStore
         };
         options.Select.Add(FieldId);
 
-        var response = await _searchClient.SearchAsync<SearchDocument>(
+        var response = await searchClient.SearchAsync<SearchDocument>(
             searchText: string.Empty,
             options,
             cancellationToken);
@@ -206,31 +236,32 @@ public class AzureAiSearchVectorStore : IVectorStore
         }).ToList();
 
         var batch = IndexDocumentsBatch.Delete(deleteDocuments);
-        await _searchClient.IndexDocumentsAsync(batch, cancellationToken: cancellationToken);
+        await searchClient.IndexDocumentsAsync(batch, cancellationToken: cancellationToken);
 
-        _logger.LogDebug("Deleted {Count} chunks for documentId {DocumentId}", ids.Count, documentId);
+        _logger.LogDebug("Deleted {Count} chunks for documentId {DocumentId} from index {IndexName}", ids.Count, documentId, collectionName);
     }
 
     // ── GetStatsAsync ──────────────────────────────────────────────────────────
 
-    public async Task<VectorStoreStats> GetStatsAsync(CancellationToken cancellationToken = default)
+    // Argha - 2026-03-04 - #17 - collectionName used as index name
+    public async Task<VectorStoreStats> GetStatsAsync(string collectionName, CancellationToken cancellationToken = default)
     {
         var stats = await _indexClient.GetIndexStatisticsAsync(
-            _settings.IndexName,
+            collectionName,
             cancellationToken);
 
         return new VectorStoreStats
         {
             TotalVectors = stats.Value.DocumentCount,
             TotalDocuments = stats.Value.DocumentCount,
-            CollectionName = _settings.IndexName,
+            CollectionName = collectionName,
             VectorDimension = _settings.EmbeddingDimension
         };
     }
 
     // ── Private helpers ────────────────────────────────────────────────────────
 
-    private SearchIndex BuildIndexDefinition()
+    private SearchIndex BuildIndexDefinition(string indexName)
     {
         var vectorProfile = new VectorSearchProfile("hnsw-profile", "hnsw-config");
         var hnswAlgorithm = new HnswAlgorithmConfiguration("hnsw-config");
@@ -239,7 +270,7 @@ public class AzureAiSearchVectorStore : IVectorStore
         vectorSearch.Algorithms.Add(hnswAlgorithm);
 
         // Argha - 2026-02-21 - SimpleField has no IsRetrievable; fields are returned by default (use IsHidden=true to hide)
-        var index = new SearchIndex(_settings.IndexName)
+        var index = new SearchIndex(indexName)
         {
             VectorSearch = vectorSearch,
             Fields =

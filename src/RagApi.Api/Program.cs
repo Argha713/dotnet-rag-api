@@ -9,6 +9,7 @@ using RagApi.Api.Models;
 using RagApi.Api.Validators;
 using RagApi.Application.Interfaces;
 using RagApi.Application.Models;
+using RagApi.Domain.Entities;
 using RagApi.Infrastructure;
 using RagApi.Infrastructure.Data;
 using Serilog;
@@ -137,15 +138,35 @@ builder.Services.AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();
 
-// Initialize vector store
+// Argha - 2026-03-04 - #17 - Startup: apply migrations, seed default workspace, then ensure all workspace collections exist
 using (var scope = app.Services.CreateScope())
 {
-    var vectorStore = scope.ServiceProvider.GetRequiredService<IVectorStore>();
-    await vectorStore.InitializeAsync();
-
     // Argha - 2026-03-02 - #6 - Apply pending EF Core migrations on startup; idempotent on repeat runs
     var dbContext = scope.ServiceProvider.GetRequiredService<RagApiDbContext>();
     await dbContext.Database.MigrateAsync();
+
+    // Argha - 2026-03-04 - #17 - Seed default workspace if it does not exist yet
+    var workspaceRepo = scope.ServiceProvider.GetRequiredService<IWorkspaceRepository>();
+    var defaultWorkspace = await workspaceRepo.GetByIdAsync(Workspace.DefaultWorkspaceId);
+    if (defaultWorkspace == null)
+    {
+        await workspaceRepo.CreateAsync(new Workspace
+        {
+            Id = Workspace.DefaultWorkspaceId,
+            Name = "Default",
+            HashedApiKey = string.Empty, // Resolved via global ApiAuth:ApiKey config, not DB hash lookup
+            CollectionName = "documents",
+            CreatedAt = DateTime.UtcNow
+        });
+    }
+
+    // Argha - 2026-03-04 - #17 - Ensure Qdrant collection exists for every registered workspace
+    var vectorStore = scope.ServiceProvider.GetRequiredService<IVectorStore>();
+    var allWorkspaces = await workspaceRepo.GetAllAsync();
+    foreach (var ws in allWorkspaces)
+    {
+        await vectorStore.EnsureCollectionAsync(ws.CollectionName);
+    }
 }
 
 // Argha - 2026-02-15 - Global exception handling — must be first in pipeline

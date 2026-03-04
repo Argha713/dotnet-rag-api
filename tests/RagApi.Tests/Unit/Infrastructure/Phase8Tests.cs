@@ -112,16 +112,17 @@ public class QdrantVectorStoreResilientTests
             .Returns(Task.CompletedTask);
     }
 
-    // ── InitializeAsync tests ────────────────────────────────────────────────
+    // ── EnsureCollectionAsync tests ──────────────────────────────────────────
 
     [Fact]
-    public async Task InitializeAsync_CollectionExists_DoesNotCreateCollection()
+    public async Task EnsureCollectionAsync_CollectionExists_DoesNotCreateCollection()
     {
         // Arrange
         SetupEnsureCollectionExists();
 
         // Act
-        await _sut.InitializeAsync();
+        // Argha - 2026-03-04 - #17 - InitializeAsync replaced by EnsureCollectionAsync(collectionName)
+        await _sut.EnsureCollectionAsync("documents");
 
         // Assert — collection already exists so CreateCollectionAsync must not be called
         _mockClient.Verify(c => c.CreateCollectionAsync(
@@ -131,13 +132,14 @@ public class QdrantVectorStoreResilientTests
     }
 
     [Fact]
-    public async Task InitializeAsync_CollectionMissing_CreatesCollection()
+    public async Task EnsureCollectionAsync_CollectionMissing_CreatesCollection()
     {
         // Arrange
         SetupEnsureCollectionMissing();
 
         // Act
-        await _sut.InitializeAsync();
+        // Argha - 2026-03-04 - #17 - InitializeAsync replaced by EnsureCollectionAsync(collectionName)
+        await _sut.EnsureCollectionAsync("documents");
 
         // Assert — missing collection triggers one CreateCollectionAsync call
         _mockClient.Verify(c => c.CreateCollectionAsync(
@@ -160,7 +162,8 @@ public class QdrantVectorStoreResilientTests
         SetupEnsureCollectionMissing();
 
         // Act
-        var results = await _sut.SearchAsync(new float[] { 0.1f }, topK: 5);
+        // Argha - 2026-03-04 - #17 - SearchAsync now takes collectionName as first param
+        var results = await _sut.SearchAsync("documents", new float[] { 0.1f }, topK: 5);
 
         // Assert — reinit ran (CreateCollectionAsync called once) and retry returned empty results
         _mockClient.Verify(c => c.CreateCollectionAsync(
@@ -178,7 +181,8 @@ public class QdrantVectorStoreResilientTests
             .ThrowsAsync(new RpcException(new Status(StatusCode.Unavailable, "service unavailable")));
 
         // Act
-        var act = async () => await _sut.SearchAsync(new float[] { 0.1f }, topK: 5);
+        // Argha - 2026-03-04 - #17 - SearchAsync now takes collectionName as first param
+        var act = async () => await _sut.SearchAsync("documents", new float[] { 0.1f }, topK: 5);
 
         // Assert — exception propagates and no reinit attempt was made
         await act.Should().ThrowAsync<RpcException>()
@@ -210,7 +214,8 @@ public class QdrantVectorStoreResilientTests
         };
 
         // Act
-        await _sut.UpsertChunksAsync(new List<DocumentChunk> { chunk });
+        // Argha - 2026-03-04 - #17 - UpsertChunksAsync now takes collectionName as first param
+        await _sut.UpsertChunksAsync("documents", new List<DocumentChunk> { chunk });
 
         // Assert — reinit + retry succeeded
         _mockClient.Verify(c => c.CreateCollectionAsync(
@@ -230,7 +235,8 @@ public class QdrantVectorStoreResilientTests
         SetupEnsureCollectionMissing();
 
         // Act
-        await _sut.DeleteDocumentChunksAsync(Guid.NewGuid());
+        // Argha - 2026-03-04 - #17 - DeleteDocumentChunksAsync now takes collectionName as first param
+        await _sut.DeleteDocumentChunksAsync("documents", Guid.NewGuid());
 
         // Assert
         _mockClient.Verify(c => c.CreateCollectionAsync(
@@ -250,7 +256,8 @@ public class QdrantVectorStoreResilientTests
         SetupEnsureCollectionMissing();
 
         // Act
-        var stats = await _sut.GetStatsAsync();
+        // Argha - 2026-03-04 - #17 - GetStatsAsync now takes collectionName as first param
+        var stats = await _sut.GetStatsAsync("documents");
 
         // Assert
         _mockClient.Verify(c => c.CreateCollectionAsync(
@@ -271,7 +278,8 @@ public class QdrantVectorStoreResilientTests
         SetupEnsureCollectionMissing();
 
         // Act
-        var results = await _sut.KeywordSearchAsync("test query", topK: 5);
+        // Argha - 2026-03-04 - #17 - KeywordSearchAsync now takes collectionName as first param
+        var results = await _sut.KeywordSearchAsync("documents", "test query", topK: 5);
 
         // Assert
         _mockClient.Verify(c => c.CreateCollectionAsync(

@@ -39,14 +39,24 @@ public class ChatControllerTests
             .ReturnsAsync(TestEmbedding);
         _chatMock.Setup(c => c.ModelName).Returns("llama3.2");
 
+        // Argha - 2026-03-04 - #17 - Provide workspace context with a fixed collection name
+        var workspaceContext = new Mock<IWorkspaceContext>();
+        workspaceContext.Setup(w => w.Current).Returns(new Workspace
+        {
+            Id = Workspace.DefaultWorkspaceId,
+            CollectionName = "documents"
+        });
+
         // Argha - 2026-02-15 - Use real RagService with mocked dependencies since it's a concrete class
-        // Argha - 2026-02-20 - Pass default SearchOptions (UseHybridSearch=false) 
+        // Argha - 2026-02-20 - Pass default SearchOptions (UseHybridSearch=false)
+        // Argha - 2026-03-04 - #17 - Pass workspace context for per-request collection name
         var ragService = new RagService(
             _vectorStoreMock.Object,
             _embeddingMock.Object,
             _chatMock.Object,
             Mock.Of<ILogger<RagService>>(),
-            Options.Create(new SearchOptions()));
+            Options.Create(new SearchOptions()),
+            workspaceContext.Object);
 
         // Argha - 2026-02-19 - Real ConversationService with mocked repository 
         var conversationService = new ConversationService(
@@ -74,7 +84,7 @@ public class ChatControllerTests
         {
             new() { ChunkId = Guid.NewGuid(), DocumentId = Guid.NewGuid(), FileName = "doc.txt", Content = "relevant content", Score = 0.9, ChunkIndex = 0 }
         };
-        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, null, It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<string>(), TestEmbedding, 5, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(searchResults);
         _chatMock.Setup(c => c.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("Test answer");
@@ -100,7 +110,7 @@ public class ChatControllerTests
         {
             new() { ChunkId = Guid.NewGuid(), DocumentId = docId, FileName = "source.pdf", Content = "text", Score = 0.85, ChunkIndex = 0 }
         };
-        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(searchResults);
         _chatMock.Setup(c => c.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("Answer");
@@ -124,7 +134,7 @@ public class ChatControllerTests
         {
             new() { ChunkId = Guid.NewGuid(), DocumentId = Guid.NewGuid(), FileName = "doc.txt", Content = "content", Score = 0.9, ChunkIndex = 0 }
         };
-        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, null, It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<string>(), TestEmbedding, 5, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(searchResults);
 
         var request = new SearchRequest { Query = "test query" };
@@ -144,7 +154,7 @@ public class ChatControllerTests
     {
         // Arrange
         var docId = Guid.NewGuid();
-        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, docId, null, It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<string>(), TestEmbedding, 5, docId, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult>());
 
         var request = new SearchRequest { Query = "query", DocumentId = docId };
@@ -153,7 +163,7 @@ public class ChatControllerTests
         await _sut.Search(request, CancellationToken.None);
 
         // Assert
-        _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, docId, null, It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.SearchAsync(It.IsAny<string>(), TestEmbedding, 5, docId, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     // Argha - 2026-02-19 - Session-based chat tests 
@@ -182,7 +192,7 @@ public class ChatControllerTests
         {
             new() { ChunkId = Guid.NewGuid(), DocumentId = Guid.NewGuid(), FileName = "doc.txt", Content = "content", Score = 0.9, ChunkIndex = 0 }
         };
-        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(searchResults);
         _chatMock.Setup(c => c.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("New answer");
@@ -213,7 +223,7 @@ public class ChatControllerTests
         {
             new() { ChunkId = Guid.NewGuid(), DocumentId = Guid.NewGuid(), FileName = "doc.txt", Content = "content", Score = 0.9, ChunkIndex = 0 }
         };
-        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(searchResults);
         _chatMock.Setup(c => c.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("The answer");
@@ -251,7 +261,7 @@ public class ChatControllerTests
         {
             new() { ChunkId = Guid.NewGuid(), DocumentId = Guid.NewGuid(), FileName = "doc.txt", Content = "content", Score = 0.9, ChunkIndex = 0 }
         };
-        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(searchResults);
         _chatMock.Setup(c => c.GenerateResponseStreamAsync(
                 It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
@@ -310,7 +320,7 @@ public class ChatControllerTests
     {
         // Arrange
         var tags = new List<string> { "finance" };
-        _vectorStoreMock.Setup(v => v.SearchAsync(TestEmbedding, 5, null, tags, It.IsAny<CancellationToken>()))
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<string>(), TestEmbedding, 5, null, tags, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SearchResult>());
 
         var request = new SearchRequest { Query = "budget", Tags = tags };
@@ -319,7 +329,7 @@ public class ChatControllerTests
         await _sut.Search(request, CancellationToken.None);
 
         // Assert
-        _vectorStoreMock.Verify(v => v.SearchAsync(TestEmbedding, 5, null, tags, It.IsAny<CancellationToken>()), Times.Once);
+        _vectorStoreMock.Verify(v => v.SearchAsync(It.IsAny<string>(), TestEmbedding, 5, null, tags, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     // Argha - 2026-02-19 - Overload without explicit cancellation token for call-site convenience
