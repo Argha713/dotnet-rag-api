@@ -79,6 +79,145 @@ public class HealthCheckTests
         result.Description.Should().Contain("Ollama unreachable");
     }
 
+    // Argha - 2026-03-07 - #22 - OpenAI and Azure OpenAI health check tests
+    [Fact]
+    public async Task OpenAiHealthCheck_Success_ReturnsHealthy()
+    {
+        // Arrange
+        var handlerMock = new Mock<HttpMessageHandler>();
+        handlerMock.Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK));
+
+        var httpClient = new HttpClient(handlerMock.Object);
+        var factoryMock = new Mock<IHttpClientFactory>();
+        factoryMock.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(httpClient);
+
+        var config = Options.Create(new AiConfiguration
+        {
+            OpenAi = new OpenAiSettings { ApiKey = "sk-test", BaseUrl = "https://api.openai.com/v1" }
+        });
+
+        var healthCheck = new OpenAiHealthCheck(
+            factoryMock.Object, config, Mock.Of<ILogger<OpenAiHealthCheck>>());
+
+        // Act
+        var result = await healthCheck.CheckHealthAsync(new HealthCheckContext());
+
+        // Assert
+        result.Status.Should().Be(HealthStatus.Healthy);
+        result.Description.Should().Contain("OpenAI reachable");
+    }
+
+    [Fact]
+    public async Task OpenAiHealthCheck_Failure_ReturnsUnhealthy()
+    {
+        // Arrange
+        var handlerMock = new Mock<HttpMessageHandler>();
+        handlerMock.Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ThrowsAsync(new HttpRequestException("Connection refused"));
+
+        var httpClient = new HttpClient(handlerMock.Object);
+        var factoryMock = new Mock<IHttpClientFactory>();
+        factoryMock.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(httpClient);
+
+        var config = Options.Create(new AiConfiguration
+        {
+            OpenAi = new OpenAiSettings { ApiKey = "sk-test", BaseUrl = "https://api.openai.com/v1" }
+        });
+
+        var healthCheck = new OpenAiHealthCheck(
+            factoryMock.Object, config, Mock.Of<ILogger<OpenAiHealthCheck>>());
+
+        // Act
+        var result = await healthCheck.CheckHealthAsync(new HealthCheckContext());
+
+        // Assert
+        result.Status.Should().Be(HealthStatus.Unhealthy);
+        result.Description.Should().Contain("OpenAI unreachable");
+    }
+
+    [Fact]
+    public async Task AzureOpenAiHealthCheck_Success_ReturnsHealthy()
+    {
+        // Arrange
+        var handlerMock = new Mock<HttpMessageHandler>();
+        handlerMock.Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK));
+
+        var httpClient = new HttpClient(handlerMock.Object);
+        var factoryMock = new Mock<IHttpClientFactory>();
+        factoryMock.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(httpClient);
+
+        var config = Options.Create(new AiConfiguration
+        {
+            AzureOpenAI = new AzureOpenAiSettings
+            {
+                Endpoint = "https://my-resource.openai.azure.com",
+                ApiKey = "test-key",
+                ChatDeployment = "gpt-4",
+                EmbeddingDeployment = "text-embedding-ada-002"
+            }
+        });
+
+        var healthCheck = new AzureOpenAiHealthCheck(
+            factoryMock.Object, config, Mock.Of<ILogger<AzureOpenAiHealthCheck>>());
+
+        // Act
+        var result = await healthCheck.CheckHealthAsync(new HealthCheckContext());
+
+        // Assert
+        result.Status.Should().Be(HealthStatus.Healthy);
+        result.Description.Should().Contain("Azure OpenAI reachable");
+    }
+
+    [Fact]
+    public async Task AzureOpenAiHealthCheck_Failure_ReturnsUnhealthy()
+    {
+        // Arrange
+        var handlerMock = new Mock<HttpMessageHandler>();
+        handlerMock.Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ThrowsAsync(new HttpRequestException("Connection refused"));
+
+        var httpClient = new HttpClient(handlerMock.Object);
+        var factoryMock = new Mock<IHttpClientFactory>();
+        factoryMock.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(httpClient);
+
+        var config = Options.Create(new AiConfiguration
+        {
+            AzureOpenAI = new AzureOpenAiSettings
+            {
+                Endpoint = "https://my-resource.openai.azure.com",
+                ApiKey = "test-key"
+            }
+        });
+
+        var healthCheck = new AzureOpenAiHealthCheck(
+            factoryMock.Object, config, Mock.Of<ILogger<AzureOpenAiHealthCheck>>());
+
+        // Act
+        var result = await healthCheck.CheckHealthAsync(new HealthCheckContext());
+
+        // Assert
+        result.Status.Should().Be(HealthStatus.Unhealthy);
+        result.Description.Should().Contain("Azure OpenAI unreachable");
+    }
+
     // Argha - 2026-03-02 - #6 - disabled: SqliteHealthCheck replaced by PostgresHealthCheck (Phase 8)
     // Tests for PostgresHealthCheck are in Phase8Tests.cs
     // [Fact]
