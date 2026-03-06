@@ -96,6 +96,34 @@ public class WorkspaceStateServiceTests
         sut.ApiKey.Should().BeEmpty();
     }
 
+    // Argha - 2026-03-07 - #20 - Verify seed block removal: fallbackApiKey no longer creates default workspace
+    [Fact]
+    public async Task InitializeAsync_WithNoStoredData_DoesNotSeedDefaultWorkspace()
+    {
+        var sut = CreateSut(out _, fallbackApiKey: "global-key");
+
+        await sut.InitializeAsync();
+
+        sut.Workspaces.Should().BeEmpty();
+        sut.Active.Should().BeNull();
+        sut.HasWorkspaces.Should().BeFalse();
+        sut.IsInitialized.Should().BeTrue();
+    }
+
+    // Argha - 2026-03-07 - #20 - HasWorkspaces reflects actual workspace list state
+    [Fact]
+    public async Task HasWorkspaces_ReturnsFalseInitially_TrueAfterAdd()
+    {
+        var sut = CreateSut(out _);
+        await sut.InitializeAsync();
+        sut.HasWorkspaces.Should().BeFalse();
+
+        var ws = new StoredWorkspace { Id = Guid.NewGuid(), Name = "X", ApiKey = "k", CreatedAt = DateTime.UtcNow };
+        await sut.AddWorkspaceAsync(ws);
+
+        sut.HasWorkspaces.Should().BeTrue();
+    }
+
     // ── Fake IJSRuntime backed by in-memory dictionary ──────────────────
     // Argha - 2026-03-04 - #17 - Minimal stub; handles localStorage.getItem / setItem / removeItem only
     private class FakeJSRuntime : IJSRuntime

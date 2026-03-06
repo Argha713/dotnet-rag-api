@@ -8,8 +8,8 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 [![Deploy](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml/badge.svg)](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat&logo=dotnet)
 ![C#](https://img.shields.io/badge/C%23-12-239120?style=flat&logo=csharp)
-![Tests](https://img.shields.io/badge/tests-273%20passing-brightgreen)
-![Phase](https://img.shields.io/badge/phase-10.1%20Workspace%20UI%20complete-brightgreen)
+![Tests](https://img.shields.io/badge/tests-275%20passing-brightgreen)
+![Phase](https://img.shields.io/badge/phase-10.2%20Onboarding%20gate%20complete-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ---
@@ -58,7 +58,10 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 
 ### Workspace UI ✅
 - **Workspaces page** — Create, switch, delete, and import workspaces from `/workspaces`
-- **Navbar chip** — Active workspace shown as indigo pill in the top navigation bar
+- **Navbar chip** — Active workspace shown as indigo pill in the top navigation bar; amber "Get Started →" badge shown to new users
+- **Onboarding guide** — 4-step setup instructions shown in the Workspaces empty state; step 2 highlighted in amber to warn about one-time API key
+- **Workspace gate** — Documents and Chat pages blocked behind a lock screen until at least one workspace is created
+- **No-documents banner** — Chat panel shows an info banner and disables the textarea when the active workspace has no documents uploaded
 - **Per-workspace chat history** — localStorage conversation list scoped by workspace ID; switches automatically on workspace change
 - **API key modal** — One-time display with clipboard copy; Done button re-enabled after 10 s if clipboard is blocked
 - **Import flow** — Paste an existing API key to link a workspace to this browser session (validates via `GET /api/documents`, resolves ID via `GET /api/workspaces/current`)
@@ -82,7 +85,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 - **GitHub Actions CI/CD** — Automated test, build, and deploy pipeline
 - **Azure deployment** — Container Apps (scales to zero) + Static Web Apps (free tier)
 - **Modern SaaS UI ✅** — Inter design system, indigo theme, drag-drop uploads, glassmorphism health dashboard, footer
-- **273 unit tests** — xUnit + Moq + FluentAssertions across all layers
+- **275 unit tests** — xUnit + Moq + FluentAssertions across all layers
 
 ---
 
