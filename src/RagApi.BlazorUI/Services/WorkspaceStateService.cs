@@ -25,6 +25,12 @@ public class WorkspaceStateService
     // Argha - 2026-03-04 - #17 - Consumed by WorkspaceKeyHandler on every outgoing request
     public string ApiKey => Active?.ApiKey ?? string.Empty;
 
+    // Argha - 2026-03-07 - #20 - true once InitializeAsync has finished reading localStorage
+    public bool IsInitialized => _initialized;
+
+    // Argha - 2026-03-07 - #20 - true if at least one workspace exists in this browser session
+    public bool HasWorkspaces => _workspaces.Count > 0;
+
     public event Action? OnChanged;
 
     public WorkspaceStateService(IJSRuntime js, IConfiguration config)
@@ -47,20 +53,20 @@ public class WorkspaceStateService
         if (Guid.TryParse(activeIdStr, out var id))
             _activeId = id;
 
-        // Argha - 2026-03-04 - #17 - Backward compat: seed default workspace from appsettings ApiKey on first launch
-        if (_workspaces.Count == 0 && !string.IsNullOrEmpty(_fallbackApiKey))
-        {
-            var defaultWs = new StoredWorkspace
-            {
-                Id = Guid.NewGuid(),
-                Name = "Default",
-                ApiKey = _fallbackApiKey,
-                CreatedAt = DateTime.UtcNow
-            };
-            _workspaces.Add(defaultWs);
-            _activeId = defaultWs.Id;
-            await PersistAsync();
-        }
+        // Argha - 2026-03-07 - #20 - removed: silent default-workspace seed; users must now explicitly create a workspace
+        // if (_workspaces.Count == 0 && !string.IsNullOrEmpty(_fallbackApiKey))
+        // {
+        //     var defaultWs = new StoredWorkspace
+        //     {
+        //         Id = Guid.NewGuid(),
+        //         Name = "Default",
+        //         ApiKey = _fallbackApiKey,
+        //         CreatedAt = DateTime.UtcNow
+        //     };
+        //     _workspaces.Add(defaultWs);
+        //     _activeId = defaultWs.Id;
+        //     await PersistAsync();
+        // }
     }
 
     public async Task AddWorkspaceAsync(StoredWorkspace ws)

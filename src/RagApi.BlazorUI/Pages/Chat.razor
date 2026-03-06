@@ -1,14 +1,41 @@
 @* Argha - 2026-03-03 - #13 - Chat page redesign: modern sidebar, indigo bubbles, improved input & sources *@
 @* Argha - 2026-03-04 - #17 - Scoped conversation list per workspace; reload on workspace switch *@
 @* Argha - 2026-02-21 - Original chat page: sidebar with conversation list + streaming message panel *@
+@* Argha - 2026-03-07 - #20 - Workspace gate + no-docs banner; textarea disabled when no documents *@
 @page "/"
 @inject ChatApiService ChatService
 @inject ConversationApiService ConversationService
 @inject LocalStorageService LocalStorage
 @inject WorkspaceStateService WsState
+@inject DocumentApiService DocService
 @implements IAsyncDisposable
 
 <PageTitle>Chat — RAG Chat</PageTitle>
+
+@* Argha - 2026-03-07 - #20 - Workspace gate: spinner while initializing, lock screen if no workspace *@
+@if (!_wsReady)
+{
+    <div style="display:flex;justify-content:center;padding:var(--space-12) 0;">
+        <div class="spinner-sm spinner-dark" style="width:24px;height:24px;border-width:3px;"></div>
+    </div>
+}
+else if (!WsState.HasWorkspaces)
+{
+    <div class="card-modern" style="max-width:480px;margin:var(--space-12) auto;">
+        <div class="empty-state" style="padding:var(--space-10) var(--space-8);">
+            <div class="empty-state-icon">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+            </div>
+            <h3>No Workspace Selected</h3>
+            <p>Create a workspace first to start chatting with your documents.</p>
+            <a href="/workspaces" class="btn-primary-modern" style="margin-top:var(--space-4);">Set up a Workspace →</a>
+        </div>
+    </div>
+}
+else
+{
 
 <div class="chat-layout">
 
@@ -58,6 +85,16 @@
 
     @* ── Right panel: messages + input ── *@
     <div class="chat-panel">
+        @* Argha - 2026-03-07 - #20 - No-docs banner: shown when workspace has no documents yet *@
+        @if (_docCheckDone && !_hasDocuments)
+        {
+            <div class="alert-modern alert-info" style="margin:var(--space-3) var(--space-4) 0;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                No documents uploaded yet. <a href="/documents" style="color:inherit;font-weight:var(--weight-semibold);">Upload documents</a> before chatting.
+            </div>
+        }
         @if (_activeConvId == Guid.Empty)
         {
             <div class="chat-empty">
@@ -153,9 +190,9 @@
                               @onkeydown="HandleKeyDownAsync"
                               placeholder="Ask a question about your documents…"
                               rows="2"
-                              disabled="@_isStreaming"></textarea>
+                              disabled="@(_isStreaming || (_docCheckDone && !_hasDocuments))"></textarea>
                     <button class="send-btn" @onclick="SendMessageAsync"
-                            disabled="@(_isStreaming || string.IsNullOrWhiteSpace(_inputText))"
+                            disabled="@(_isStreaming || string.IsNullOrWhiteSpace(_inputText) || (_docCheckDone && !_hasDocuments))"
                             title="Send (Ctrl+Enter)">
                         @if (_isStreaming)
                         {
@@ -175,6 +212,8 @@
     </div>
 </div>
 
+} @* end else HasWorkspaces *@
+
 @code {
     // ── Conversation list (IDs persisted in localStorage per workspace) ──
     private List<StoredConversation> _conversations = new();
@@ -191,6 +230,13 @@
     private ElementReference _messagesContainer;
     private CancellationTokenSource? _streamCts;
 
+    // Argha - 2026-03-07 - #20 - Workspace gate state
+    private bool _wsReady;
+
+    // Argha - 2026-03-07 - #20 - Document check state; optimistic true to avoid flash-of-disabled on load
+    private bool _hasDocuments = true;
+    private bool _docCheckDone = false;
+
     protected override void OnInitialized()
     {
         // Argha - 2026-03-04 - #17 - Subscribe early so workspace switches reload conversation list
@@ -203,12 +249,17 @@
         {
             // Argha - 2026-03-04 - #17 - Ensure workspace state loaded before reading active workspace key
             await WsState.InitializeAsync();
-            await LoadConversationsAsync();
+            _wsReady = true;
+            if (WsState.HasWorkspaces)
+            {
+                await LoadConversationsAsync();
+                await CheckDocumentCountAsync();
+            }
             StateHasChanged();
         }
     }
 
-    // Argha - 2026-03-04 - #17 - Reload conversation list from new workspace key when active workspace changes
+    // Argha - 2026-03-07 - #20 - Reload conversation list from new workspace key when active workspace changes
     private void OnWorkspaceChanged()
     {
         _ = InvokeAsync(async () =>
@@ -216,9 +267,28 @@
             _conversations = new();
             _activeConvId = Guid.Empty;
             _messages = new();
-            await LoadConversationsAsync();
+            _docCheckDone = false;
+            _hasDocuments = true;
+            if (WsState.HasWorkspaces)
+            {
+                await LoadConversationsAsync();
+                await CheckDocumentCountAsync();
+            }
             StateHasChanged();
         });
+    }
+
+    // Argha - 2026-03-07 - #20 - Check if workspace has any documents; fail-open on API error
+    private async Task CheckDocumentCountAsync()
+    {
+        if (WsState.Active == null) return;
+        try
+        {
+            var docs = await DocService.GetDocumentsAsync();
+            _hasDocuments = docs.Count > 0;
+        }
+        catch { _hasDocuments = true; }  // fail-open: don't block chat on API error
+        finally { _docCheckDone = true; StateHasChanged(); }
     }
 
     // Argha - 2026-03-04 - #17 - Conversation list scoped per workspace: key = rag_conversations_{workspaceId}

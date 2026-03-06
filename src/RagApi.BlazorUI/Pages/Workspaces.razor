@@ -63,18 +63,49 @@
     }
 
     @* ── Workspace cards ── *@
+    @* Argha - 2026-03-07 - #20 - Replaced empty state with 4-step onboarding guide *@
     @if (WsState.Workspaces.Count == 0)
     {
         <div class="card-modern" style="margin-bottom:var(--space-5);">
-            <div class="empty-state" style="padding:var(--space-10) var(--space-8);">
-                <div class="empty-state-icon">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-                        <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-                    </svg>
+            <h3 style="font-size:var(--text-base);font-weight:var(--weight-semibold);color:var(--text-primary);margin:0 0 var(--space-1);">Get Started with RAG Chat</h3>
+            <p style="font-size:var(--text-sm);color:var(--text-muted);margin:0 0 var(--space-5);">Follow these steps to set up your workspace.</p>
+
+            <div class="onboarding-steps">
+                <div class="onboarding-step">
+                    <div class="onboarding-step-num">1</div>
+                    <div class="onboarding-step-body">
+                        <h4>Create a Workspace</h4>
+                        <p>Click "New Workspace" above, give it a name, and click Create.</p>
+                    </div>
                 </div>
-                <h3>No workspaces yet</h3>
-                <p>Create your first workspace to start isolating data per team or client.</p>
+                <div class="onboarding-step">
+                    <div class="onboarding-step-num step-warn">2</div>
+                    <div class="onboarding-step-body">
+                        <h4>Save Your API Key</h4>
+                        <p>Your key is shown <strong>once</strong> and cannot be retrieved again. Store it in a password manager or secure note.</p>
+                    </div>
+                </div>
+                <div class="onboarding-step">
+                    <div class="onboarding-step-num">3</div>
+                    <div class="onboarding-step-body">
+                        <h4>Upload Documents</h4>
+                        <p>Go to Documents and upload PDF, DOCX, TXT, or MD files.</p>
+                    </div>
+                </div>
+                <div class="onboarding-step">
+                    <div class="onboarding-step-num">4</div>
+                    <div class="onboarding-step-body">
+                        <h4>Start Chatting</h4>
+                        <p>Go to Chat and ask questions about your documents.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert-modern alert-info" style="margin-top:var(--space-5);">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <span><strong>Returning on another device or browser?</strong> Use the Import section below with your saved key to reconnect to your data.</span>
             </div>
         </div>
     }

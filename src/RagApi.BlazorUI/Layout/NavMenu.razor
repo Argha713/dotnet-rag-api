@@ -66,12 +66,24 @@
             </ul>
 
             @* Argha - 2026-03-04 - #17 - Active workspace chip shown on right end of navbar *@
+            @* Argha - 2026-03-07 - #20 - Amber badge shown when initialized but no workspace yet *@
             @if (WsState.Active != null)
             {
                 <div class="ms-auto me-3">
                     <a href="/workspaces" class="workspace-chip" style="text-decoration:none;">
                         <span class="ws-dot"></span>
                         @WsState.Active.Name
+                    </a>
+                </div>
+            }
+            else if (WsState.IsInitialized)
+            {
+                <div class="ms-auto me-3">
+                    <a href="/workspaces" class="nav-setup-prompt">
+                        Get Started
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+                        </svg>
                     </a>
                 </div>
             }
