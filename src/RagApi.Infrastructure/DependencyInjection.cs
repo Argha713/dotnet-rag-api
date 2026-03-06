@@ -117,19 +117,13 @@ public static class DependencyInjection
             healthChecks.AddCheck<QdrantHealthCheck>("qdrant", tags: ["dependency"]);
         }
 
+        // Argha - 2026-03-07 - #22 - Register AI provider health check based on active provider
         if (aiConfig.Provider.Equals("AzureOpenAI", StringComparison.OrdinalIgnoreCase))
-        {
-            // Azure OpenAI health check can be added in a future phase
-        }
-        // Argha - 2026-03-01 - OpenAI is a managed external service — no local health check needed
+            healthChecks.AddCheck<AzureOpenAiHealthCheck>("azure-openai", tags: ["dependency"]);
         else if (aiConfig.Provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
-        {
-            // No Ollama health check for OpenAI provider
-        }
+            healthChecks.AddCheck<OpenAiHealthCheck>("openai", tags: ["dependency"]);
         else
-        {
             healthChecks.AddCheck<OllamaHealthCheck>("ollama", tags: ["dependency"]);
-        }
 
         return services;
     }
