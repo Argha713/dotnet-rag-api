@@ -78,13 +78,21 @@ public class QdrantVectorStore : IVectorStore
             }
 
             // Argha - 2026-02-20 - Create full-text payload index on 'content' for keyword search
-            // CreatePayloadIndexAsync is idempotent — safe to call on every startup
+            // Argha - 2026-03-06 - #18 - Add keyword index on 'documentId'; Qdrant now requires an index for filter-based deletes
+            // CreatePayloadIndexAsync is idempotent — safe to call on every startup; backfills existing collections automatically
             await _client.CreatePayloadIndexAsync(
                 name: collectionName,
                 field: "content",
                 schema: PayloadSchemaType.Text,
                 ct: cancellationToken);
             _logger.LogDebug("Full-text payload index on 'content' ensured for {CollectionName}", collectionName);
+
+            await _client.CreatePayloadIndexAsync(
+                name: collectionName,
+                field: "documentId",
+                schema: PayloadSchemaType.Keyword,
+                ct: cancellationToken);
+            _logger.LogDebug("Keyword payload index on 'documentId' ensured for {CollectionName}", collectionName);
         }
         catch (Exception ex)
         {

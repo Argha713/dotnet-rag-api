@@ -125,10 +125,11 @@ public class QdrantVectorStoreResilientTests
         await _sut.EnsureCollectionAsync("documents");
 
         // Assert — collection already exists so CreateCollectionAsync must not be called
+        // Argha - 2026-03-06 - #18 - Exactly(2): once for 'content' text index, once for 'documentId' keyword index
         _mockClient.Verify(c => c.CreateCollectionAsync(
             It.IsAny<string>(), It.IsAny<VectorParams>(), It.IsAny<CancellationToken>()), Times.Never());
         _mockClient.Verify(c => c.CreatePayloadIndexAsync(
-            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<PayloadSchemaType>(), It.IsAny<CancellationToken>()), Times.Once());
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<PayloadSchemaType>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     [Fact]
@@ -142,10 +143,11 @@ public class QdrantVectorStoreResilientTests
         await _sut.EnsureCollectionAsync("documents");
 
         // Assert — missing collection triggers one CreateCollectionAsync call
+        // Argha - 2026-03-06 - #18 - Exactly(2): once for 'content' text index, once for 'documentId' keyword index
         _mockClient.Verify(c => c.CreateCollectionAsync(
             It.IsAny<string>(), It.IsAny<VectorParams>(), It.IsAny<CancellationToken>()), Times.Once());
         _mockClient.Verify(c => c.CreatePayloadIndexAsync(
-            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<PayloadSchemaType>(), It.IsAny<CancellationToken>()), Times.Once());
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<PayloadSchemaType>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     // ── ExecuteWithReinitAsync resilience tests ──────────────────────────────
