@@ -126,4 +126,25 @@ public class ConversationServiceTests
         // Assert
         result.Should().BeFalse();
     }
+
+    // Argha - 2026-03-15 - #24 - Test for ListSessionsAsync passthrough
+    [Fact]
+    public async Task ListSessionsAsync_DelegatesToRepository_ReturnsSessions()
+    {
+        // Arrange
+        var sessions = new List<ConversationSession>
+        {
+            new() { Id = Guid.NewGuid(), Title = "Chat A" },
+            new() { Id = Guid.NewGuid(), Title = "Chat B" }
+        };
+        _repoMock.Setup(r => r.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(sessions);
+
+        // Act
+        var result = await _sut.ListSessionsAsync();
+
+        // Assert
+        result.Should().HaveCount(2);
+        result[0].Title.Should().Be("Chat A");
+        _repoMock.Verify(r => r.ListAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

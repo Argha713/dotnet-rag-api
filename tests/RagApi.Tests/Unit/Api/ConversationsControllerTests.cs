@@ -122,4 +122,42 @@ public class ConversationsControllerTests
         // Assert
         result.Should().BeOfType<NotFoundResult>();
     }
+
+    // Argha - 2026-03-15 - #24 - Tests for GET /api/conversations list endpoint
+    [Fact]
+    public async Task ListSessions_WithSessions_Returns200WithSummaryList()
+    {
+        // Arrange
+        var session1 = new ConversationSession { Id = Guid.NewGuid(), Title = "First chat" };
+        var session2 = new ConversationSession { Id = Guid.NewGuid(), Title = "Second chat" };
+        _repoMock.Setup(r => r.ListAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ConversationSession> { session1, session2 });
+
+        // Act
+        var result = await _sut.ListSessions(CancellationToken.None);
+
+        // Assert
+        var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
+        var dtos = okResult.Value.Should().BeOfType<List<ConversationSummaryDto>>().Subject;
+        dtos.Should().HaveCount(2);
+        dtos[0].SessionId.Should().Be(session1.Id);
+        dtos[0].Title.Should().Be("First chat");
+        dtos[1].SessionId.Should().Be(session2.Id);
+    }
+
+    [Fact]
+    public async Task ListSessions_EmptyWorkspace_Returns200WithEmptyList()
+    {
+        // Arrange
+        _repoMock.Setup(r => r.ListAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ConversationSession>());
+
+        // Act
+        var result = await _sut.ListSessions(CancellationToken.None);
+
+        // Assert
+        var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
+        var dtos = okResult.Value.Should().BeOfType<List<ConversationSummaryDto>>().Subject;
+        dtos.Should().BeEmpty();
+    }
 }

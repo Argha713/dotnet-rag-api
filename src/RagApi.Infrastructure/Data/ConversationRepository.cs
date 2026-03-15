@@ -89,4 +89,13 @@ public class ConversationRepository : IConversationRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
+
+    // Argha - 2026-03-15 - #24 - List all sessions for the current workspace, newest-first
+    public async Task<List<ConversationSession>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.ConversationSessions
+            .Where(s => s.WorkspaceId == _workspaceContext.Current.Id)
+            .OrderByDescending(s => s.LastMessageAt)
+            .ToListAsync(cancellationToken);
+    }
 }

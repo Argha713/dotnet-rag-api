@@ -233,6 +233,10 @@ public class BatchUploadItemResultDto
     public string? ErrorMessage { get; set; }
 }
 
+// Argha - 2026-03-15 - #24 - Lightweight session entry for GET /api/conversations list
+/// <summary>Returned by GET /api/conversations — no messages field for performance</summary>
+public record ConversationSummaryDto(Guid SessionId, string? Title, DateTime CreatedAt, DateTime LastMessageAt);
+
 // Argha - 2026-03-04 - #17 - Workspace DTOs for multi-tenancy endpoints
 
 /// <summary>Request body to create a new workspace</summary>

@@ -291,12 +291,17 @@ else
         finally { _docCheckDone = true; StateHasChanged(); }
     }
 
-    // Argha - 2026-03-04 - #17 - Conversation list scoped per workspace: key = rag_conversations_{workspaceId}
+    // Argha - 2026-03-15 - #24 - Load conversation list from server; localStorage removed as source of truth
     private async Task LoadConversationsAsync()
     {
-        var key = $"rag_conversations_{WsState.Active?.Id ?? Guid.Empty}";
-        var stored = await LocalStorage.GetItemAsync<List<StoredConversation>>(key);
-        _conversations = stored ?? new List<StoredConversation>();
+        try
+        {
+            var summaries = await ConversationService.ListAsync();
+            _conversations = summaries
+                .Select(s => new StoredConversation { Id = s.SessionId, Title = s.Title, CreatedAt = s.CreatedAt })
+                .ToList();
+        }
+        catch { _conversations = new(); }
 
         if (_conversations.Count > 0)
             await SelectConversationAsync(_conversations[0].Id);
@@ -309,7 +314,6 @@ else
             var session = await ConversationService.CreateAsync();
             var conv = new StoredConversation { Id = session.SessionId, Title = "New chat", CreatedAt = session.CreatedAt };
             _conversations.Insert(0, conv);
-            await PersistConversationsAsync();
             await SelectConversationAsync(session.SessionId);
         }
         catch (Exception ex)
@@ -344,7 +348,6 @@ else
         catch { /* best effort */ }
 
         _conversations.RemoveAll(c => c.Id == id);
-        await PersistConversationsAsync();
 
         if (_activeConvId == id)
         {
@@ -406,15 +409,12 @@ else
             assistantMsg.IsStreaming = false;
             _isStreaming = false;
 
-            // Argha - 2026-02-21 - Update conversation title from the first user message
+            // Argha - 2026-02-21 - Update conversation title in-memory for immediate UI feedback; server owns the real title
             if (_messages.Count(m => m.Role == "user") == 1)
             {
                 var conv = _conversations.FirstOrDefault(c => c.Id == _activeConvId);
                 if (conv != null)
-                {
                     conv.Title = query.Length > 45 ? query[..45] + "…" : query;
-                    await PersistConversationsAsync();
-                }
             }
 
             StateHasChanged();
@@ -427,11 +427,12 @@ else
             await SendMessageAsync();
     }
 
-    // Argha - 2026-03-04 - #17 - localStorage key scoped to active workspace so conversations are isolated per workspace
+    // Argha - 2026-03-15 - #24 - Commented out: server is now source of truth; localStorage no longer persisted
     private async Task PersistConversationsAsync()
     {
-        var key = $"rag_conversations_{WsState.Active?.Id ?? Guid.Empty}";
-        await LocalStorage.SetItemAsync(key, _conversations);
+        // var key = $"rag_conversations_{WsState.Active?.Id ?? Guid.Empty}";
+        // await LocalStorage.SetItemAsync(key, _conversations);
+        await Task.CompletedTask;
     }
 
     public async ValueTask DisposeAsync()

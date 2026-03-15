@@ -28,4 +28,7 @@ public interface IConversationRepository
 
     /// <summary>Returns false if the session does not exist</summary>
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns all sessions for the current workspace, newest-first</summary>
+    Task<List<ConversationSession>> ListAsync(CancellationToken cancellationToken = default);
 }

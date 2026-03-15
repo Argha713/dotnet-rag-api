@@ -101,4 +101,29 @@ public class ConversationApiServiceTests
 
         await act.Should().ThrowAsync<HttpRequestException>();
     }
+
+    // Argha - 2026-03-15 - #24 - Test for ListAsync
+    [Fact]
+    public async Task ListAsync_ReturnsConversationSummaries()
+    {
+        var summaries = new List<ConversationSummaryDto>
+        {
+            new(Guid.NewGuid(), "Chat A", DateTime.UtcNow, DateTime.UtcNow),
+            new(Guid.NewGuid(), "Chat B", DateTime.UtcNow, DateTime.UtcNow)
+        };
+        var (sut, handler) = BuildSut(HttpStatusCode.OK, JsonSerializer.Serialize(summaries, _opts));
+
+        var result = await sut.ListAsync();
+
+        result.Should().HaveCount(2);
+        result[0].Title.Should().Be("Chat A");
+        result[1].Title.Should().Be("Chat B");
+        handler.Protected().Verify(
+            "SendAsync",
+            Times.Once(),
+            ItExpr.Is<HttpRequestMessage>(r =>
+                r.Method == HttpMethod.Get &&
+                r.RequestUri!.PathAndQuery == "/api/conversations"),
+            ItExpr.IsAny<CancellationToken>());
+    }
 }

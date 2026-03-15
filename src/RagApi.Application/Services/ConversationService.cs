@@ -67,4 +67,12 @@ public class ConversationService
         _logger.LogInformation("Deleting conversation session {SessionId}", id);
         return await _repository.DeleteAsync(id, cancellationToken);
     }
+
+    // Argha - 2026-03-15 - #24 - List all sessions for the active workspace
+    /// <summary>Returns all sessions for the active workspace, newest-first</summary>
+    public async Task<List<ConversationSession>> ListSessionsAsync(CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("Listing conversation sessions");
+        return await _repository.ListAsync(cancellationToken);
+    }
 }

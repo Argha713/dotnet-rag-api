@@ -34,4 +34,11 @@ public class ConversationApiService
         var response = await _http.DeleteAsync($"/api/conversations/{id}", ct);
         response.EnsureSuccessStatusCode();
     }
+
+    // Argha - 2026-03-15 - #24 - List all sessions for the active workspace
+    public async Task<List<ConversationSummaryDto>> ListAsync(CancellationToken ct = default)
+    {
+        var result = await _http.GetFromJsonAsync<List<ConversationSummaryDto>>("/api/conversations", _jsonOptions, ct);
+        return result ?? new List<ConversationSummaryDto>();
+    }
 }

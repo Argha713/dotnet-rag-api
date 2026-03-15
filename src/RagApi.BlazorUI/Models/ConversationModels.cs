@@ -23,3 +23,6 @@ public class SessionMessageDto
     public string Content { get; set; } = string.Empty;
     public DateTime Timestamp { get; set; }
 }
+
+// Argha - 2026-03-15 - #24 - Mirrors ConversationSummaryDto from the API
+public record ConversationSummaryDto(Guid SessionId, string? Title, DateTime CreatedAt, DateTime LastMessageAt);

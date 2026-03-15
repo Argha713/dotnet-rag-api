@@ -30,6 +30,19 @@ public class ConversationsController : ControllerBase
         _exportService = exportService;
     }
 
+    // Argha - 2026-03-15 - #24 - List all sessions for the active workspace
+    /// <summary>List all conversation sessions for the authenticated workspace, newest first</summary>
+    [HttpGet]
+    [ProducesResponseType(typeof(List<ConversationSummaryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListSessions(CancellationToken cancellationToken)
+    {
+        var sessions = await _conversationService.ListSessionsAsync(cancellationToken);
+        var dtos = sessions
+            .Select(s => new ConversationSummaryDto(s.Id, s.Title, s.CreatedAt, s.LastMessageAt))
+            .ToList();
+        return Ok(dtos);
+    }
+
     /// <summary>
     /// Create a new conversation session
     /// </summary>
