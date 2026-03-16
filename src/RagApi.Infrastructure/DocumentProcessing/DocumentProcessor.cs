@@ -2,6 +2,7 @@ using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
+using UglyToad.PdfPig.Tokens;
 using RagApi.Application.Interfaces;
 using RagApi.Domain.Entities;
 using Microsoft.Extensions.Logging;
@@ -295,5 +296,89 @@ public class DocumentProcessor : IDocumentProcessor
     {
         using var reader = new StreamReader(fileStream);
         return await reader.ReadToEndAsync(cancellationToken);
+    }
+
+    // Argha - 2026-03-16 - #34 - Extract images from PDF pages; non-PDF types return empty (DOCX handled in #35)
+    public Task<List<ExtractedImage>> ExtractImagesAsync(Stream fileStream, string contentType, CancellationToken ct = default)
+    {
+        if (!contentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult(new List<ExtractedImage>());
+
+        var results = new List<ExtractedImage>();
+
+        using var document = PdfDocument.Open(fileStream);
+        var pageNumber = 0;
+
+        foreach (var page in document.GetPages())
+        {
+            pageNumber++;
+            var imageIndex = 0;
+
+            foreach (var image in page.GetImages())
+            {
+                // Argha - 2026-03-16 - #34 - Skip decorative/icon images below minimum dimension threshold
+                if (image.WidthInSamples < 100 || image.HeightInSamples < 100)
+                    continue;
+
+                // Argha - 2026-03-16 - #34 - Determine filter; skip unsupported compression formats
+                var filterName = GetImageFilterName(image);
+                if (filterName is "JBIG2Decode" or "CCITTFaxDecode")
+                    continue;
+
+                byte[] bytes;
+                string mimeType;
+
+                if (filterName == "DCTDecode")
+                {
+                    // Argha - 2026-03-16 - #34 - DCTDecode = JPEG; RawBytes holds the encoded JPEG data
+                    bytes = image.RawBytes.ToArray();
+                    mimeType = "image/jpeg";
+                }
+                else
+                {
+                    // Argha - 2026-03-16 - #34 - All other encodings: attempt conversion to PNG via PdfPig
+                    if (!image.TryGetPng(out var png) || png is null)
+                        continue;
+
+                    bytes = png;
+                    mimeType = "image/png";
+                }
+
+                // Argha - 2026-03-16 - #34 - Skip images exceeding 20MB safety limit
+                const int MaxBytes = 20 * 1024 * 1024;
+                if (bytes.Length > MaxBytes)
+                    continue;
+
+                results.Add(new ExtractedImage(
+                    PageNumber: pageNumber,
+                    ImageIndex: imageIndex,
+                    Bytes: bytes,
+                    MimeType: mimeType,
+                    WidthPx: image.WidthInSamples,
+                    HeightPx: image.HeightInSamples));
+
+                imageIndex++;
+            }
+        }
+
+        return Task.FromResult(results);
+    }
+
+    // Argha - 2026-03-16 - #34 - Read the first filter name from ImageDictionary; returns null when no filter key exists
+    private static string? GetImageFilterName(IPdfImage image)
+    {
+        var dict = image.ImageDictionary;
+
+        if (!dict.TryGet(NameToken.Filter, out IToken? filterToken))
+            return null;
+
+        // Argha - 2026-03-16 - #34 - Filter may be a single name or an array; read the first entry
+        if (filterToken is NameToken nameTok)
+            return nameTok.Data;
+
+        if (filterToken is ArrayToken arrayTok && arrayTok.Data.Count > 0 && arrayTok.Data[0] is NameToken firstNameTok)
+            return firstNameTok.Data;
+
+        return null;
     }
 }

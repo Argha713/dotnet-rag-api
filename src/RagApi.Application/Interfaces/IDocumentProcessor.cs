@@ -26,7 +26,21 @@ public interface IDocumentProcessor
     /// Get list of supported content types
     /// </summary>
     IReadOnlyList<string> SupportedContentTypes { get; }
+
+    /// <summary>
+    /// Extract images from a document. Currently supports PDF only; returns empty list for all other content types.
+    /// </summary>
+    Task<List<ExtractedImage>> ExtractImagesAsync(Stream fileStream, string contentType, CancellationToken ct = default);
 }
+
+// Argha - 2026-03-16 - #34 - Image extracted from a PDF page; used by the multimodal ingestion pipeline
+public record ExtractedImage(
+    int PageNumber,
+    int ImageIndex,
+    byte[] Bytes,
+    string MimeType,
+    int WidthPx,
+    int HeightPx);
 
 // Argha - 2026-02-20 - Chunking strategy selection
 public enum ChunkingStrategy
