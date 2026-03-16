@@ -298,9 +298,15 @@ public class DocumentProcessor : IDocumentProcessor
         return await reader.ReadToEndAsync(cancellationToken);
     }
 
-    // Argha - 2026-03-16 - #34 - Extract images from PDF pages; non-PDF types return empty (DOCX handled in #35)
+    // Argha - 2026-03-16 - #34 - Extract images from a document; dispatches to PDF or DOCX handler
     public Task<List<ExtractedImage>> ExtractImagesAsync(Stream fileStream, string contentType, CancellationToken ct = default)
     {
+        // Argha - 2026-03-16 - #35 - DOCX branch; must be checked before the PDF guard
+        if (contentType.Equals(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            StringComparison.OrdinalIgnoreCase))
+            return ExtractImagesFromDocxAsync(fileStream);
+
         if (!contentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
             return Task.FromResult(new List<ExtractedImage>());
 
@@ -380,5 +386,109 @@ public class DocumentProcessor : IDocumentProcessor
             return firstNameTok.Data;
 
         return null;
+    }
+
+    // Argha - 2026-03-16 - #35 - Enumerate MainDocumentPart.ImageParts; DOCX images have no page numbers (PageNumber = 0)
+    private Task<List<ExtractedImage>> ExtractImagesFromDocxAsync(Stream fileStream)
+    {
+        var results = new List<ExtractedImage>();
+
+        using var document = WordprocessingDocument.Open(fileStream, false);
+        var mainPart = document.MainDocumentPart;
+        if (mainPart == null)
+            return Task.FromResult(results);
+
+        var imageIndex = 0;
+        const int MaxBytes = 20 * 1024 * 1024;
+
+        foreach (var imagePart in mainPart.ImageParts)
+        {
+            var mimeType = imagePart.ContentType;
+
+            byte[] bytes;
+            using (var imgStream = imagePart.GetStream())
+            using (var ms = new MemoryStream())
+            {
+                imgStream.CopyTo(ms);
+                bytes = ms.ToArray();
+            }
+
+            // Argha - 2026-03-16 - #35 - Reject images exceeding 20MB safety limit
+            if (bytes.Length > MaxBytes)
+                continue;
+
+            // Argha - 2026-03-16 - #35 - Apply 100x100 filter when dimensions are readable; include if unreadable
+            var (width, height) = TryGetImageDimensions(bytes, mimeType);
+            if (width.HasValue && height.HasValue && (width.Value < 100 || height.Value < 100))
+                continue;
+
+            results.Add(new ExtractedImage(
+                PageNumber: 0,
+                ImageIndex: imageIndex,
+                Bytes: bytes,
+                MimeType: mimeType,
+                WidthPx: width ?? 0,
+                HeightPx: height ?? 0));
+
+            imageIndex++;
+        }
+
+        return Task.FromResult(results);
+    }
+
+    // Argha - 2026-03-16 - #35 - Dispatch dimension reading by MIME type; returns (null,null) for unrecognised formats
+    private static (int? Width, int? Height) TryGetImageDimensions(byte[] bytes, string mimeType) =>
+        mimeType.ToLowerInvariant() switch
+        {
+            "image/png"                => ReadPngDimensions(bytes),
+            "image/jpeg" or "image/jpg" => ReadJpegDimensions(bytes),
+            "image/gif"                => ReadGifDimensions(bytes),
+            _                          => (null, null)
+        };
+
+    // Argha - 2026-03-16 - #35 - PNG IHDR: bytes 16–19 = width BE, bytes 20–23 = height BE
+    private static (int? Width, int? Height) ReadPngDimensions(byte[] bytes)
+    {
+        if (bytes.Length < 24 || bytes[0] != 0x89 || bytes[1] != 0x50 || bytes[2] != 0x4E || bytes[3] != 0x47)
+            return (null, null);
+
+        var w = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+        var h = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
+        return (w, h);
+    }
+
+    // Argha - 2026-03-16 - #35 - JPEG: scan for SOF0 (FF C0) or SOF2 (FF C2); height at marker+5, width at marker+7
+    private static (int? Width, int? Height) ReadJpegDimensions(byte[] bytes)
+    {
+        if (bytes.Length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8)
+            return (null, null);
+
+        var i = 2;
+        while (i + 8 < bytes.Length)
+        {
+            if (bytes[i] != 0xFF) break;
+            var marker = bytes[i + 1];
+            var segLen = (bytes[i + 2] << 8) | bytes[i + 3];
+
+            if (marker == 0xC0 || marker == 0xC2)
+            {
+                var h = (bytes[i + 5] << 8) | bytes[i + 6];
+                var w = (bytes[i + 7] << 8) | bytes[i + 8];
+                return (w, h);
+            }
+            i += 2 + segLen;
+        }
+        return (null, null);
+    }
+
+    // Argha - 2026-03-16 - #35 - GIF header: bytes 6–7 = width LE, bytes 8–9 = height LE
+    private static (int? Width, int? Height) ReadGifDimensions(byte[] bytes)
+    {
+        if (bytes.Length < 10 || bytes[0] != 0x47 || bytes[1] != 0x49 || bytes[2] != 0x46)
+            return (null, null);
+
+        var w = bytes[6] | (bytes[7] << 8);
+        var h = bytes[8] | (bytes[9] << 8);
+        return (w, h);
     }
 }

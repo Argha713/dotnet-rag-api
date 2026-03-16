@@ -28,7 +28,7 @@ public interface IDocumentProcessor
     IReadOnlyList<string> SupportedContentTypes { get; }
 
     /// <summary>
-    /// Extract images from a document. Currently supports PDF only; returns empty list for all other content types.
+    /// Extract images from a document. Supports PDF (via PdfPig) and DOCX (via OpenXml ImageParts); returns empty list for all other content types.
     /// </summary>
     Task<List<ExtractedImage>> ExtractImagesAsync(Stream fileStream, string contentType, CancellationToken ct = default);
 }
