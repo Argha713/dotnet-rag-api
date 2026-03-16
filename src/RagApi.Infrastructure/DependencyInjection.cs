@@ -104,6 +104,9 @@ public static class DependencyInjection
         services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
         services.AddScoped<IWorkspaceContext, WorkspaceContext>();
 
+        // Argha - 2026-03-16 - #33 - PostgreSQL-backed image store for multimodal RAG pipeline
+        services.AddScoped<IImageStore, PostgresImageStore>();
+
         // Register application services
         services.AddScoped<RagService>();
         services.AddScoped<DocumentService>();
