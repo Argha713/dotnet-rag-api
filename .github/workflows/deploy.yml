@@ -59,17 +59,15 @@ jobs:
             --resource-group rg-rag-demo \
             --secrets "pg-connection-string=${{ secrets.POSTGRES_CONNECTION_STRING }}"
 
-      # Argha - 2026-03-02 - #8 - Wire secret to env var; safe to re-run on every deploy
-      - name: Wire PostgreSQL secret as environment variable
+      # Argha - 2026-03-16 - #27 - Single update: sets image + env var + revision-suffix in one call.
+      # Combining into one step avoids the previous bug where --set-env-vars created a revision with
+      # the OLD :latest image, leaving the deploy action with nothing new to do.
+      # --revision-suffix sha-<short-sha> guarantees a new revision on every push.
+      - name: Deploy to Azure Container Apps
         run: |
           az containerapp update \
             --name rag-api \
             --resource-group rg-rag-demo \
-            --set-env-vars "ConnectionStrings__DefaultConnection=secretref:pg-connection-string"
-
-      - name: Deploy to Azure Container Apps
-        uses: azure/container-apps-deploy-action@v2
-        with:
-          resourceGroup: rg-rag-demo
-          containerAppName: rag-api
-          imageToDeploy: ghcr.io/argha713/dotnet-rag-api:latest
+            --image ghcr.io/argha713/dotnet-rag-api:latest \
+            --set-env-vars "ConnectionStrings__DefaultConnection=secretref:pg-connection-string" \
+            --revision-suffix sha-$(echo "${{ github.sha }}" | cut -c1-7)
