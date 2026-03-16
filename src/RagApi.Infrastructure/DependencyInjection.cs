@@ -55,6 +55,16 @@ public static class DependencyInjection
             services.AddHttpClient<IChatService, OllamaChatService>();
         }
 
+        // Argha - 2026-03-16 - #32 - Vision service: real impl only when enabled + provider is OpenAI
+        services.Configure<VisionConfiguration>(configuration.GetSection(VisionConfiguration.SectionName));
+        var visionConfig = configuration.GetSection(VisionConfiguration.SectionName)
+            .Get<VisionConfiguration>() ?? new VisionConfiguration();
+
+        if (visionConfig.Enabled && aiConfig.Provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
+            services.AddHttpClient<IVisionService, OpenAIVisionService>();
+        else
+            services.AddSingleton<IVisionService, NullVisionService>();
+
         // Argha - 2026-02-21 - Switch vector store backend based on VectorStore:Provider
         var vectorStoreConfig = configuration.GetSection(VectorStoreConfiguration.SectionName)
             .Get<VectorStoreConfiguration>() ?? new VectorStoreConfiguration();

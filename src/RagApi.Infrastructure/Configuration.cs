@@ -45,6 +45,18 @@ public class OpenAiSettings
     public int EmbeddingDimension { get; set; } = 1536;
 }
 
+// Argha - 2026-03-16 - #32 - Vision configuration for GPT-4o image description during document ingestion
+public class VisionConfiguration
+{
+    public const string SectionName = "Vision";
+
+    // Argha - 2026-03-16 - #32 - When false, NullVisionService is registered and image description is skipped
+    public bool Enabled { get; set; } = false;
+
+    // Argha - 2026-03-16 - #32 - gpt-4o-mini balances cost and quality for document image description
+    public string Model { get; set; } = "gpt-4o-mini";
+}
+
 /// <summary>
 /// Configuration for Qdrant vector database
 /// </summary>
