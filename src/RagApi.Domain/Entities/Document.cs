@@ -23,6 +23,9 @@ public class Document
     // Argha - 2026-03-04 - #17 - FK to Workspaces; all document operations are scoped by workspace
     public Guid WorkspaceId { get; set; }
     public Workspace? Workspace { get; set; }
+
+    // Argha - 2026-03-16 - #30 - Navigation to extracted images; populated during Phase 14 ingestion
+    public ICollection<DocumentImage> Images { get; set; } = new List<DocumentImage>();
 }
 
 public enum DocumentStatus

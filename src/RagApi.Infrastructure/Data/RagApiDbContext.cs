@@ -19,6 +19,9 @@ public class RagApiDbContext : DbContext
     // Argha - 2026-03-04 - #17 - Workspace table for multi-tenancy
     public DbSet<Workspace> Workspaces => Set<Workspace>();
 
+    // Argha - 2026-03-16 - #30 - DocumentImages table for Phase 14 multimodal RAG
+    public DbSet<DocumentImage> DocumentImages => Set<DocumentImage>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Argha - 2026-03-04 - #17 - Workspace model configuration
@@ -100,6 +103,49 @@ public class RagApiDbContext : DbContext
                 .HasForeignKey(d => d.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(d => new { d.WorkspaceId, d.UploadedAt });
+        });
+
+        // Argha - 2026-03-16 - #30 - DocumentImage model configuration
+        modelBuilder.Entity<DocumentImage>(entity =>
+        {
+            entity.HasKey(i => i.Id);
+
+            entity.Property(i => i.ContentType)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            // Argha - 2026-03-16 - #30 - GPT-4o descriptions are typically 100-600 words (~3600 chars max)
+            entity.Property(i => i.AiDescription)
+                .HasMaxLength(4000);
+
+            entity.Property(i => i.Data)
+                .IsRequired();
+
+            entity.Property(i => i.CreatedAt)
+                .IsRequired();
+
+            // Argha - 2026-03-16 - #30 - FK to Documents with CASCADE delete;
+            // deleting a document removes all its extracted images
+            entity.Property(i => i.DocumentId).IsRequired();
+            entity.HasOne(i => i.Document)
+                .WithMany(d => d.Images)
+                .HasForeignKey(i => i.DocumentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Argha - 2026-03-16 - #30 - Direct FK to Workspaces with CASCADE delete;
+            // enables workspace-scoped queries on DocumentImages without joining through Documents
+            entity.Property(i => i.WorkspaceId).IsRequired();
+            entity.HasOne(i => i.Workspace)
+                .WithMany()
+                .HasForeignKey(i => i.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Argha - 2026-03-16 - #30 - Primary access pattern: list all images for a document
+            // ordered by page (used by PostgresImageStore #33)
+            entity.HasIndex(i => new { i.DocumentId, i.PageNumber });
+
+            // Argha - 2026-03-16 - #30 - Workspace-scoped single-record fetch for GET /api/images/{id} (#37)
+            entity.HasIndex(i => new { i.WorkspaceId, i.Id });
         });
     }
 }
