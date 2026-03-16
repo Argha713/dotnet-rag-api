@@ -53,6 +53,10 @@ public class WorkspaceStateService
         if (Guid.TryParse(activeIdStr, out var id))
             _activeId = id;
 
+        // Argha - 2026-03-16 - #25 - Notify subscribers after localStorage reads complete so Chat.razor
+        // re-evaluates HasWorkspaces even when it called InitializeAsync during NavMenu's in-flight await
+        OnChanged?.Invoke();
+
         // Argha - 2026-03-07 - #20 - removed: silent default-workspace seed; users must now explicitly create a workspace
         // if (_workspaces.Count == 0 && !string.IsNullOrEmpty(_fallbackApiKey))
         // {
