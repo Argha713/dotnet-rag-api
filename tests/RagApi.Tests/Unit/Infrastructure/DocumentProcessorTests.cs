@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using RagApi.Application.Interfaces;
 using RagApi.Infrastructure.DocumentProcessing;
+using UglyToad.PdfPig.Writer;
 
 namespace RagApi.Tests.Unit.Infrastructure;
 
@@ -148,5 +149,39 @@ public class DocumentProcessorTests
         {
             chunks[i].ChunkIndex.Should().Be(i);
         }
+    }
+
+    // Argha - 2026-03-16 - #34 - ExtractImagesAsync tests: surface area and fast-path coverage
+
+    [Fact]
+    public async Task ExtractImagesAsync_PlainTextContentType_ReturnsEmpty()
+    {
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("hello world"));
+        var result = await _sut.ExtractImagesAsync(stream, "text/plain");
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExtractImagesAsync_DocxContentType_ReturnsEmpty()
+    {
+        using var stream = new MemoryStream(new byte[] { 0x50, 0x4B, 0x03, 0x04 }); // ZIP magic bytes
+        var result = await _sut.ExtractImagesAsync(
+            stream,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExtractImagesAsync_TextOnlyPdf_ReturnsEmpty()
+    {
+        // Argha - 2026-03-16 - #34 - Build a minimal single-page text-only PDF with no embedded images
+        var builder = new PdfDocumentBuilder();
+        builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        var pdfBytes = builder.Build();
+
+        using var stream = new MemoryStream(pdfBytes);
+        var result = await _sut.ExtractImagesAsync(stream, "application/pdf");
+
+        result.Should().BeEmpty();
     }
 }
