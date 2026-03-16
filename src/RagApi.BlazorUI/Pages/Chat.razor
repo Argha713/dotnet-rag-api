@@ -301,7 +301,12 @@ else
                 .Select(s => new StoredConversation { Id = s.SessionId, Title = s.Title, CreatedAt = s.CreatedAt })
                 .ToList();
         }
-        catch { _conversations = new(); }
+        catch (Exception ex)
+        {
+            // Argha - 2026-03-16 - #25 - Surface load error so it is visible; previously swallowed silently
+            _errorMessage = $"Could not load conversations: {ex.Message}";
+            _conversations = new();
+        }
 
         if (_conversations.Count > 0)
             await SelectConversationAsync(_conversations[0].Id);
