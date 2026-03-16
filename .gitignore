@@ -70,6 +70,9 @@ secrets.json
 .claude/
 CLAUDE.md
 
+# Superpowers plans (local dev tooling)
+docs/
+
 # Test files
 test-sample.txt
 

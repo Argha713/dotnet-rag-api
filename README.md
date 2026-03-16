@@ -8,8 +8,8 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 [![Deploy](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml/badge.svg)](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat&logo=dotnet)
 ![C#](https://img.shields.io/badge/C%23-12-239120?style=flat&logo=csharp)
-![Tests](https://img.shields.io/badge/tests-283%20passing-brightgreen)
-![Phase](https://img.shields.io/badge/phase-10.3%20Server--side%20conversation%20list-brightgreen)
+![Tests](https://img.shields.io/badge/tests-287%20passing-brightgreen)
+![Phase](https://img.shields.io/badge/phase-14.1%20IVisionService%20%2B%20IImageStore-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ---
@@ -86,7 +86,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 - **GitHub Actions CI/CD** — Automated test, build, and deploy pipeline
 - **Azure deployment** — Container Apps (scales to zero) + Static Web Apps (free tier)
 - **Modern SaaS UI ✅** — Inter design system, indigo theme, drag-drop uploads, glassmorphism health dashboard, footer
-- **283 unit tests** — xUnit + Moq + FluentAssertions across all layers
+- **287 unit tests** — xUnit + Moq + FluentAssertions across all layers
 
 ---
 
