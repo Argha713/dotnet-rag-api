@@ -30,6 +30,8 @@ public class PostgresImageStoreStreamTests : IAsyncLifetime
     // Argha - 2026-03-17 - #37 - Parent rows seeded once for the whole class; cleaned up in DisposeAsync
     private Guid _testDocumentId = Guid.NewGuid();
     private readonly List<Guid> _seededImageIds = new();
+    // Argha - 2026-03-17 - #39 - Extra workspace rows seeded by individual tests; cleaned up in DisposeAsync
+    private readonly List<Guid> _seededWorkspaceIds = new();
 
     public PostgresImageStoreStreamTests()
     {
@@ -106,6 +108,12 @@ public class PostgresImageStoreStreamTests : IAsyncLifetime
                 .ToListAsync();
             _dbContext.DocumentImages.RemoveRange(images);
             await _dbContext.SaveChangesAsync();
+        }
+
+        // Argha - 2026-03-17 - #39 - Clean up extra workspace rows seeded by individual tests
+        foreach (var wsId in _seededWorkspaceIds)
+        {
+            await _dbContext.Set<Workspace>().Where(w => w.Id == wsId).ExecuteDeleteAsync();
         }
 
         var doc = await _dbContext.Documents.FindAsync(_testDocumentId);
@@ -185,6 +193,8 @@ public class PostgresImageStoreStreamTests : IAsyncLifetime
         };
         _dbContext.Workspaces.Add(otherWorkspace);
         await _dbContext.SaveChangesAsync();
+        // Argha - 2026-03-17 - #39 - Track for cleanup in DisposeAsync (consistent with _seededImageIds pattern)
+        _seededWorkspaceIds.Add(otherWorkspaceId);
 
         var image = await SeedImageAsync(workspaceId: otherWorkspaceId);
 
@@ -199,10 +209,6 @@ public class PostgresImageStoreStreamTests : IAsyncLifetime
         {
             if (result is not null)
                 await result.DisposeAsync();
-
-            // Argha - 2026-03-17 - #39 - Clean up extra workspace row created in this test
-            _dbContext.Workspaces.Remove(otherWorkspace);
-            await _dbContext.SaveChangesAsync();
         }
     }
 

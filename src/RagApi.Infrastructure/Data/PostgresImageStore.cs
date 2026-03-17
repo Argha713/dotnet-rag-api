@@ -8,7 +8,9 @@ using RagApi.Domain.Entities;
 namespace RagApi.Infrastructure.Data;
 
 // Argha - 2026-03-16 - #33 - PostgreSQL-backed image store; persists raw image bytes
-// as bytea rows in DocumentImages; all queries workspace-scoped via IWorkspaceContext
+// as bytea rows in DocumentImages.
+// Argha - 2026-03-17 - #39 - Write/delete queries workspace-scoped via IWorkspaceContext;
+// GetStreamAsync reads are open-by-GUID (capability token model)
 public class PostgresImageStore : IImageStore
 {
     private readonly RagApiDbContext _dbContext;
