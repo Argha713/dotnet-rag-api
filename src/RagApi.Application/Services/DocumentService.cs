@@ -19,21 +19,26 @@ public class DocumentService
     private readonly IVectorStore _vectorStore;
     private readonly ILogger<DocumentService> _logger;
     private readonly IDocumentRepository _documentRepository;
-    // Argha - 2026-02-20 - Default chunking options from config 
+    // Argha - 2026-02-20 - Default chunking options from config
     private readonly DocumentProcessingOptions _processingOptions;
 
-    // Argha - 2026-02-15 - Commented out: replaced with SQLite via IDocumentRepository 
+    // Argha - 2026-02-15 - Commented out: replaced with SQLite via IDocumentRepository
     // private static readonly ConcurrentDictionary<Guid, Document> _documents = new();
 
-    // Argha - 2026-02-21 - Batch upload options for concurrency and file count limits 
+    // Argha - 2026-02-21 - Batch upload options for concurrency and file count limits
     private readonly BatchUploadOptions _batchOptions;
 
     // Argha - 2026-03-04 - #17 - Workspace context provides the collection name for vector store isolation
     private readonly IWorkspaceContext _workspaceContext;
 
+    // Argha - 2026-03-17 - #36 - Vision service and image store; optional so existing tests compile unchanged
+    private readonly IVisionService? _visionService;
+    private readonly IImageStore? _imageStore;
+
     // Argha - 2026-02-20 - Added IOptions<DocumentProcessingOptions> for configurable chunking
     // Argha - 2026-02-21 - Added IOptions<BatchUploadOptions> for batch upload settings
     // Argha - 2026-03-04 - #17 - Added IWorkspaceContext for per-request collection name
+    // Argha - 2026-03-17 - #36 - Added optional IVisionService + IImageStore for multimodal ingestion
     public DocumentService(
         IDocumentProcessor documentProcessor,
         IEmbeddingService embeddingService,
@@ -42,7 +47,9 @@ public class DocumentService
         IDocumentRepository documentRepository,
         IOptions<DocumentProcessingOptions> processingOptions,
         IWorkspaceContext workspaceContext,
-        IOptions<BatchUploadOptions>? batchOptions = null)
+        IOptions<BatchUploadOptions>? batchOptions = null,
+        IVisionService? visionService = null,
+        IImageStore? imageStore = null)
     {
         _documentProcessor = documentProcessor;
         _embeddingService = embeddingService;
@@ -53,6 +60,8 @@ public class DocumentService
         _workspaceContext = workspaceContext;
         // Argha - 2026-02-21 - Optional to avoid breaking existing test constructors that don't pass it
         _batchOptions = batchOptions?.Value ?? new BatchUploadOptions();
+        _visionService = visionService;
+        _imageStore = imageStore;
     }
 
     /// <summary>
@@ -135,14 +144,32 @@ public class DocumentService
             // Argha - 2026-03-04 - #17 - Use workspace's collection name for tenant isolation
             await _vectorStore.UpsertChunksAsync(_workspaceContext.Current.CollectionName, chunks, cancellationToken);
 
+            // Argha - 2026-03-17 - #36 - Step 5 (best-effort): vision pipeline — describe and embed images
+            var imageChunks = new List<DocumentChunk>();
+            if (_visionService?.IsEnabled == true)
+            {
+                // Rewind: UploadDocumentAsync requires a seekable stream (MemoryStream from IFormFile satisfies this)
+                fileStream.Position = 0;
+                imageChunks = await RunVisionPipelineAsync(document.Id, fileName, contentType, normalizedTags, fileStream, cancellationToken);
+            }
+
+            if (imageChunks.Count > 0)
+            {
+                var descEmbeddings = await _embeddingService.GenerateEmbeddingsAsync(
+                    imageChunks.Select(c => c.Content).ToList(), cancellationToken);
+                for (int i = 0; i < imageChunks.Count; i++)
+                    imageChunks[i].Embedding = descEmbeddings[i];
+                await _vectorStore.UpsertChunksAsync(_workspaceContext.Current.CollectionName, imageChunks, cancellationToken);
+            }
+
             // Update document status
             document.Status = DocumentStatus.Completed;
-            document.ChunkCount = chunks.Count;
+            document.ChunkCount = chunks.Count + imageChunks.Count;
             await _documentRepository.UpdateAsync(document, cancellationToken);
 
             _logger.LogInformation(
-                "Document {DocumentId} processed successfully. {ChunkCount} chunks stored.",
-                document.Id, chunks.Count);
+                "Document {DocumentId} processed successfully. {ChunkCount} text chunks, {ImageChunkCount} image chunks stored.",
+                document.Id, chunks.Count, imageChunks.Count);
 
             return document;
         }
@@ -195,6 +222,10 @@ public class DocumentService
 
         try
         {
+            // Argha - 2026-03-17 - #36 - Remove stale image records before re-extracting
+            if (_imageStore != null)
+                await _imageStore.DeleteByDocumentAsync(documentId, cancellationToken);
+
             // Step 1: Remove old vectors so stale chunks don't remain in the index
             _logger.LogDebug("Deleting old chunks for document {DocumentId}", documentId);
             // Argha - 2026-03-04 - #17 - Use workspace's collection name for tenant isolation
@@ -243,20 +274,37 @@ public class DocumentService
             // Argha - 2026-03-04 - #17 - Use workspace's collection name for tenant isolation
             await _vectorStore.UpsertChunksAsync(_workspaceContext.Current.CollectionName, chunks, cancellationToken);
 
+            // Argha - 2026-03-17 - #36 - Step 5b (best-effort): vision pipeline for updated document
+            var imageChunks = new List<DocumentChunk>();
+            if (_visionService?.IsEnabled == true)
+            {
+                fileStream.Position = 0;
+                imageChunks = await RunVisionPipelineAsync(documentId, fileName, contentType, normalizedTags, fileStream, cancellationToken);
+            }
+
+            if (imageChunks.Count > 0)
+            {
+                var descEmbeddings = await _embeddingService.GenerateEmbeddingsAsync(
+                    imageChunks.Select(c => c.Content).ToList(), cancellationToken);
+                for (int i = 0; i < imageChunks.Count; i++)
+                    imageChunks[i].Embedding = descEmbeddings[i];
+                await _vectorStore.UpsertChunksAsync(_workspaceContext.Current.CollectionName, imageChunks, cancellationToken);
+            }
+
             // Step 6: Persist updated metadata
             document.FileName = fileName;
             document.ContentType = contentType;
             document.FileSize = fileStream.Length;
             document.TagsJson = JsonSerializer.Serialize(normalizedTags);
             document.Status = DocumentStatus.Completed;
-            document.ChunkCount = chunks.Count;
+            document.ChunkCount = chunks.Count + imageChunks.Count;
             document.UpdatedAt = DateTime.UtcNow;
             document.ErrorMessage = null;
             await _documentRepository.UpdateAsync(document, cancellationToken);
 
             _logger.LogInformation(
-                "Document {DocumentId} re-processed successfully. {ChunkCount} chunks stored.",
-                documentId, chunks.Count);
+                "Document {DocumentId} re-processed successfully. {ChunkCount} text chunks, {ImageChunkCount} image chunks stored.",
+                documentId, chunks.Count, imageChunks.Count);
 
             return document;
         }
@@ -308,6 +356,10 @@ public class DocumentService
     {
         _logger.LogInformation("Deleting document {DocumentId}", documentId);
 
+        // Argha - 2026-03-17 - #36 - Remove image records before vector chunks
+        if (_imageStore != null)
+            await _imageStore.DeleteByDocumentAsync(documentId, cancellationToken);
+
         // Remove chunks from vector store
         // Argha - 2026-03-04 - #17 - Use workspace's collection name for tenant isolation
         await _vectorStore.DeleteDocumentChunksAsync(_workspaceContext.Current.CollectionName, documentId, cancellationToken);
@@ -317,6 +369,90 @@ public class DocumentService
         await _documentRepository.DeleteAsync(documentId, cancellationToken);
 
         _logger.LogInformation("Document {DocumentId} deleted successfully", documentId);
+    }
+
+    // Argha - 2026-03-17 - #36 - Best-effort: describe each extracted image with the vision service,
+    // persist bytes to the image store, and return one DocumentChunk per image.
+    // Individual image failures are logged and skipped — the whole upload is never failed by vision errors.
+    private async Task<List<DocumentChunk>> RunVisionPipelineAsync(
+        Guid documentId,
+        string fileName,
+        string contentType,
+        List<string> tags,
+        Stream fileStream,
+        CancellationToken cancellationToken)
+    {
+        List<ExtractedImage> images;
+        try
+        {
+            images = await _documentProcessor.ExtractImagesAsync(fileStream, contentType, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Vision pipeline: image extraction failed for document {DocumentId} — skipping", documentId);
+            return new List<DocumentChunk>();
+        }
+
+        if (images.Count == 0)
+            return new List<DocumentChunk>();
+
+        _logger.LogInformation("Vision pipeline: {Count} images found in document {DocumentId}", images.Count, documentId);
+
+        var chunks = new List<DocumentChunk>();
+        int succeeded = 0;
+
+        foreach (var image in images)
+        {
+            try
+            {
+                var description = await _visionService!.DescribeImageAsync(
+                    image.Bytes, image.MimeType, context: fileName, ct: cancellationToken);
+
+                var docImage = new DocumentImage
+                {
+                    DocumentId = documentId,
+                    WorkspaceId = _workspaceContext.Current.Id,
+                    PageNumber = image.PageNumber > 0 ? image.PageNumber : null,
+                    ContentType = image.MimeType,
+                    Data = image.Bytes,
+                    AiDescription = description,
+                    CreatedAt = DateTime.UtcNow
+                };
+                var imageId = await _imageStore!.SaveAsync(docImage, cancellationToken);
+
+                var chunk = new DocumentChunk
+                {
+                    DocumentId = documentId,
+                    Content = description,
+                    ChunkIndex = image.ImageIndex,
+                    IsImageChunk = true,
+                    ImageId = imageId,
+                    Tags = tags,
+                    Metadata = new Dictionary<string, string>
+                    {
+                        ["fileName"] = fileName,
+                        ["contentType"] = contentType,
+                        ["isImage"] = "true",
+                        ["imageId"] = imageId.ToString(),
+                        ["pageNumber"] = image.PageNumber.ToString()
+                    }
+                };
+                chunks.Add(chunk);
+                succeeded++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Vision pipeline: failed to process image {Index} (page {Page}) for document {DocumentId} — skipping",
+                    image.ImageIndex, image.PageNumber, documentId);
+            }
+        }
+
+        _logger.LogInformation(
+            "Vision pipeline: {Succeeded}/{Total} images processed for document {DocumentId}",
+            succeeded, images.Count, documentId);
+
+        return chunks;
     }
 
     /// <summary>

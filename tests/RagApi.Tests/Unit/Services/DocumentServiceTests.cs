@@ -419,3 +419,276 @@ public class DocumentServiceTests
             It.IsAny<CancellationToken>()), Times.AtLeastOnce);
     }
 }
+
+// Argha - 2026-03-17 - #36 - Vision ingestion pipeline tests (separate fixture so existing tests stay unchanged)
+public class DocumentServiceVisionPipelineTests
+{
+    private readonly Mock<IDocumentProcessor> _processorMock = new();
+    private readonly Mock<IEmbeddingService> _embeddingMock = new();
+    private readonly Mock<IVectorStore> _vectorStoreMock = new();
+    private readonly Mock<ILogger<DocumentService>> _loggerMock = new();
+    private readonly Mock<IDocumentRepository> _repositoryMock = new();
+    private readonly Mock<IVisionService> _visionMock = new();
+    private readonly Mock<IImageStore> _imageStoreMock = new();
+    private readonly Mock<IWorkspaceContext> _workspaceContextMock = new();
+
+    private const string TestCollection = "documents";
+
+    public DocumentServiceVisionPipelineTests()
+    {
+        _processorMock.Setup(p => p.IsSupported("application/pdf")).Returns(true);
+        _processorMock.Setup(p => p.SupportedContentTypes)
+            .Returns(new[] { "text/plain", "application/pdf" });
+
+        _workspaceContextMock.Setup(w => w.Current).Returns(new Workspace
+        {
+            Id = Workspace.DefaultWorkspaceId,
+            CollectionName = TestCollection
+        });
+    }
+
+    private DocumentService BuildSut(bool visionEnabled = true)
+    {
+        _visionMock.Setup(v => v.IsEnabled).Returns(visionEnabled);
+        return new DocumentService(
+            _processorMock.Object,
+            _embeddingMock.Object,
+            _vectorStoreMock.Object,
+            _loggerMock.Object,
+            _repositoryMock.Object,
+            Options.Create(new DocumentProcessingOptions()),
+            _workspaceContextMock.Object,
+            visionService: _visionMock.Object,
+            imageStore: _imageStoreMock.Object);
+    }
+
+    private void SetupTextPipeline(string text = "some text")
+    {
+        _processorMock.Setup(p => p.ExtractTextAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(text);
+        _processorMock.Setup(p => p.ChunkText(It.IsAny<Guid>(), text, It.IsAny<ChunkingOptions?>()))
+            .Returns(new List<DocumentChunk> { new() { Content = text, Metadata = new() } });
+        _embeddingMock.Setup(e => e.GenerateEmbeddingsAsync(It.IsAny<List<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((List<string> texts, CancellationToken _) =>
+                texts.Select(_ => new float[768]).ToList());
+    }
+
+    private static ExtractedImage MakeImage(int page = 1, int index = 0) =>
+        new(PageNumber: page, ImageIndex: index, Bytes: new byte[] { 1, 2, 3 },
+            MimeType: "image/png", WidthPx: 200, HeightPx: 200);
+
+    // ── Upload: happy path ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Upload_VisionEnabled_CallsDescribeForEachImage()
+    {
+        // Arrange
+        var sut = BuildSut();
+        SetupTextPipeline();
+        var images = new List<ExtractedImage> { MakeImage(1, 0), MakeImage(2, 1) };
+        _processorMock.Setup(p => p.ExtractImagesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(images);
+        _visionMock.Setup(v => v.DescribeImageAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("A diagram");
+        _imageStoreMock.Setup(s => s.SaveAsync(It.IsAny<DocumentImage>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Guid.NewGuid());
+        using var stream = new MemoryStream(new byte[10]);
+
+        // Act
+        await sut.UploadDocumentAsync(stream, "doc.pdf", "application/pdf");
+
+        // Assert
+        _visionMock.Verify(v => v.DescribeImageAsync(It.IsAny<byte[]>(), "image/png", "doc.pdf", It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task Upload_VisionEnabled_SavesImageForEachExtractedImage()
+    {
+        // Arrange
+        var sut = BuildSut();
+        SetupTextPipeline();
+        _processorMock.Setup(p => p.ExtractImagesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ExtractedImage> { MakeImage() });
+        _visionMock.Setup(v => v.DescribeImageAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("A chart");
+        _imageStoreMock.Setup(s => s.SaveAsync(It.IsAny<DocumentImage>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Guid.NewGuid());
+        using var stream = new MemoryStream(new byte[10]);
+
+        // Act
+        await sut.UploadDocumentAsync(stream, "report.pdf", "application/pdf");
+
+        // Assert
+        _imageStoreMock.Verify(s => s.SaveAsync(
+            It.Is<DocumentImage>(img =>
+                img.DocumentId != Guid.Empty &&
+                img.WorkspaceId == Workspace.DefaultWorkspaceId &&
+                img.AiDescription == "A chart"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Upload_VisionEnabled_UpsertsImageChunkWithIsImageTrue()
+    {
+        // Arrange
+        var sut = BuildSut();
+        SetupTextPipeline();
+        var imageId = Guid.NewGuid();
+        _processorMock.Setup(p => p.ExtractImagesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ExtractedImage> { MakeImage() });
+        _visionMock.Setup(v => v.DescribeImageAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Flowchart");
+        _imageStoreMock.Setup(s => s.SaveAsync(It.IsAny<DocumentImage>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(imageId);
+        var capturedChunks = new List<DocumentChunk>();
+        _vectorStoreMock.Setup(v => v.UpsertChunksAsync(It.IsAny<string>(), It.IsAny<List<DocumentChunk>>(), It.IsAny<CancellationToken>()))
+            .Callback<string, List<DocumentChunk>, CancellationToken>((_, c, _) => capturedChunks.AddRange(c))
+            .Returns(Task.CompletedTask);
+        using var stream = new MemoryStream(new byte[10]);
+
+        // Act
+        await sut.UploadDocumentAsync(stream, "manual.pdf", "application/pdf");
+
+        // Assert: second UpsertChunksAsync call contains the image chunk
+        var imageChunk = capturedChunks.FirstOrDefault(c => c.IsImageChunk);
+        imageChunk.Should().NotBeNull();
+        imageChunk!.ImageId.Should().Be(imageId);
+        imageChunk.Content.Should().Be("Flowchart");
+        imageChunk.Metadata["isImage"].Should().Be("true");
+        imageChunk.Metadata["imageId"].Should().Be(imageId.ToString());
+    }
+
+    [Fact]
+    public async Task Upload_VisionEnabled_ChunkCountIncludesImageChunks()
+    {
+        // Arrange
+        var sut = BuildSut();
+        SetupTextPipeline();
+        _processorMock.Setup(p => p.ExtractImagesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ExtractedImage> { MakeImage(1, 0), MakeImage(2, 1) });
+        _visionMock.Setup(v => v.DescribeImageAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("description");
+        _imageStoreMock.Setup(s => s.SaveAsync(It.IsAny<DocumentImage>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Guid.NewGuid());
+        using var stream = new MemoryStream(new byte[10]);
+
+        // Act
+        var result = await sut.UploadDocumentAsync(stream, "doc.pdf", "application/pdf");
+
+        // Assert: 1 text chunk + 2 image chunks
+        result.ChunkCount.Should().Be(3);
+    }
+
+    // ── Upload: vision disabled ─────────────────────────────────────────────
+
+    [Fact]
+    public async Task Upload_VisionDisabled_DoesNotExtractImages()
+    {
+        // Arrange
+        var sut = BuildSut(visionEnabled: false);
+        SetupTextPipeline();
+        using var stream = new MemoryStream(new byte[10]);
+
+        // Act
+        await sut.UploadDocumentAsync(stream, "doc.pdf", "application/pdf");
+
+        // Assert
+        _processorMock.Verify(p => p.ExtractImagesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _imageStoreMock.Verify(s => s.SaveAsync(It.IsAny<DocumentImage>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // ── Upload: best-effort failure isolation ───────────────────────────────
+
+    [Fact]
+    public async Task Upload_OneImageDescriptionFails_OtherImagesStillProcessed()
+    {
+        // Arrange
+        var sut = BuildSut();
+        SetupTextPipeline();
+        _processorMock.Setup(p => p.ExtractImagesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ExtractedImage> { MakeImage(1, 0), MakeImage(2, 1) });
+        // First image fails, second succeeds
+        var callCount = 0;
+        _visionMock.Setup(v => v.DescribeImageAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() =>
+            {
+                callCount++;
+                if (callCount == 1) throw new Exception("Vision API timeout");
+                return "Second image description";
+            });
+        _imageStoreMock.Setup(s => s.SaveAsync(It.IsAny<DocumentImage>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Guid.NewGuid());
+        using var stream = new MemoryStream(new byte[10]);
+
+        // Act — must not throw
+        var result = await sut.UploadDocumentAsync(stream, "doc.pdf", "application/pdf");
+
+        // Assert: 1 text + 1 image chunk (second image only)
+        result.Status.Should().Be(DocumentStatus.Completed);
+        result.ChunkCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Upload_ImageExtractionThrows_DocumentStillCompletes()
+    {
+        // Arrange
+        var sut = BuildSut();
+        SetupTextPipeline();
+        _processorMock.Setup(p => p.ExtractImagesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("PDF parse error"));
+        using var stream = new MemoryStream(new byte[10]);
+
+        // Act — must not throw
+        var result = await sut.UploadDocumentAsync(stream, "doc.pdf", "application/pdf");
+
+        // Assert
+        result.Status.Should().Be(DocumentStatus.Completed);
+        _imageStoreMock.Verify(s => s.SaveAsync(It.IsAny<DocumentImage>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // ── Delete: cascade to image store ─────────────────────────────────────
+
+    [Fact]
+    public async Task Delete_CallsImageStoreDeleteBeforeVectorStore()
+    {
+        // Arrange
+        var sut = BuildSut();
+        var docId = Guid.NewGuid();
+        var callOrder = new List<string>();
+        _imageStoreMock.Setup(s => s.DeleteByDocumentAsync(docId, It.IsAny<CancellationToken>()))
+            .Callback(() => callOrder.Add("imageStore"))
+            .Returns(Task.CompletedTask);
+        _vectorStoreMock.Setup(v => v.DeleteDocumentChunksAsync(It.IsAny<string>(), docId, It.IsAny<CancellationToken>()))
+            .Callback(() => callOrder.Add("vectorStore"))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await sut.DeleteDocumentAsync(docId);
+
+        // Assert
+        _imageStoreMock.Verify(s => s.DeleteByDocumentAsync(docId, It.IsAny<CancellationToken>()), Times.Once);
+        callOrder.Should().Equal("imageStore", "vectorStore");
+    }
+
+    // ── Update: stale image cleanup ─────────────────────────────────────────
+
+    [Fact]
+    public async Task Update_DeletesOldImagesBeforeReprocessing()
+    {
+        // Arrange
+        var sut = BuildSut(visionEnabled: false); // keep it simple — just verify cleanup
+        var docId = Guid.NewGuid();
+        var existingDoc = new Document { Id = docId, FileName = "old.pdf" };
+        _repositoryMock.Setup(r => r.GetByIdAsync(docId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingDoc);
+        SetupTextPipeline();
+        _processorMock.Setup(p => p.IsSupported("application/pdf")).Returns(true);
+        using var stream = new MemoryStream(new byte[10]);
+
+        // Act
+        await sut.UpdateDocumentAsync(docId, stream, "new.pdf", "application/pdf");
+
+        // Assert
+        _imageStoreMock.Verify(s => s.DeleteByDocumentAsync(docId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+}
