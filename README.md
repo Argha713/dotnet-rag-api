@@ -8,8 +8,8 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 [![Deploy](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml/badge.svg)](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat&logo=dotnet)
 ![C#](https://img.shields.io/badge/C%23-12-239120?style=flat&logo=csharp)
-![Tests](https://img.shields.io/badge/tests-319%20passing-brightgreen)
-![Phase](https://img.shields.io/badge/phase-14.6%20vision%20ingestion%20pipeline-brightgreen)
+![Tests](https://img.shields.io/badge/tests-324%20passing-brightgreen)
+![Phase](https://img.shields.io/badge/phase-14.7%20image%20serve%20endpoint-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ---
@@ -86,7 +86,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 - **GitHub Actions CI/CD** — Automated test, build, and deploy pipeline
 - **Azure deployment** — Container Apps (scales to zero) + Static Web Apps (free tier)
 - **Modern SaaS UI ✅** — Inter design system, indigo theme, drag-drop uploads, glassmorphism health dashboard, footer
-- **319 unit tests** — xUnit + Moq + FluentAssertions across all layers
+- **324 unit tests** — xUnit + Moq + FluentAssertions across all layers
 
 ---
 
@@ -300,7 +300,7 @@ Cors__AllowedOrigins__0=https://your-frontend.azurestaticapps.net
 | **Frontend** | Blazor WebAssembly (.NET 8) — Inter design system, indigo theme |
 | **Hosting** | Azure Container Apps + Azure Static Web Apps |
 | **CI/CD** | GitHub Actions → GHCR → Azure |
-| **Testing** | xUnit, Moq, FluentAssertions (319 tests) |
+| **Testing** | xUnit, Moq, FluentAssertions (324 tests) |
 | **API Docs** | Swagger / OpenAPI |
 
 ---
@@ -316,7 +316,7 @@ dotnet-rag-api/
 │   ├── RagApi.Domain/           # Core entities
 │   └── RagApi.Infrastructure/   # Qdrant, OpenAI, Azure, EF Core
 ├── tests/
-│   └── RagApi.Tests/            # 319 unit tests
+│   └── RagApi.Tests/            # 324 unit tests
 ├── .github/workflows/           # CI, Deploy API, Deploy UI
 ├── docker-compose.yml           # Local Qdrant + Ollama + PostgreSQL
 ├── Dockerfile                   # Production container image
