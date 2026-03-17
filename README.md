@@ -8,8 +8,8 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 [![Deploy](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml/badge.svg)](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat&logo=dotnet)
 ![C#](https://img.shields.io/badge/C%23-12-239120?style=flat&logo=csharp)
-![Tests](https://img.shields.io/badge/tests-324%20passing-brightgreen)
-![Phase](https://img.shields.io/badge/phase-14.7%20image%20serve%20endpoint-brightgreen)
+![Tests](https://img.shields.io/badge/tests-328%20passing-brightgreen)
+![Phase](https://img.shields.io/badge/phase-14.8%20image%20sources%20UI-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ---
@@ -37,7 +37,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 - **Semantic search** — Vector similarity via Qdrant
 - **Hybrid search** — Combines vector similarity with full-text keyword search using Reciprocal Rank Fusion (RRF)
 - **MMR re-ranking** — Maximal Marginal Relevance reorders results to reduce redundancy
-- **Source citations** — Every answer includes references with relevance scores
+- **Source citations** — Every answer includes references with relevance scores; image sources render inline with a thumbnail and caption
 
 ### AI Providers
 - **OpenAI** — `gpt-4o-mini` + `text-embedding-3-small` (production default, lowest cost)
@@ -86,7 +86,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 - **GitHub Actions CI/CD** — Automated test, build, and deploy pipeline
 - **Azure deployment** — Container Apps (scales to zero) + Static Web Apps (free tier)
 - **Modern SaaS UI ✅** — Inter design system, indigo theme, drag-drop uploads, glassmorphism health dashboard, footer
-- **324 unit tests** — xUnit + Moq + FluentAssertions across all layers
+- **328 unit tests** — xUnit + Moq + FluentAssertions across all layers
 
 ---
 
