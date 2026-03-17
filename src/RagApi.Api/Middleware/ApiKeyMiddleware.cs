@@ -18,6 +18,9 @@ public class ApiKeyMiddleware
 {
     private const string ApiKeyHeader = "X-Api-Key";
     private const string HealthPath = "/api/system/health";
+    // Argha - 2026-03-17 - #39 - Images are publicly accessible by GUID (unguessable capability token);
+    // browser <img> tags cannot send custom headers so auth bypass is required
+    private const string ImagesPath = "/api/images";
 
     private readonly RequestDelegate _next;
     private readonly string? _configuredKey;
@@ -44,6 +47,14 @@ public class ApiKeyMiddleware
 
         // Argha - 2026-02-20 - Health check is always public
         if (context.Request.Path.StartsWithSegments(HealthPath, StringComparison.OrdinalIgnoreCase))
+        {
+            await _next(context);
+            return;
+        }
+
+        // Argha - 2026-03-17 - #39 - Images are public by GUID; no workspace context needed
+        // (PostgresImageStore.GetStreamAsync queries by ID only — see #39)
+        if (context.Request.Path.StartsWithSegments(ImagesPath, StringComparison.OrdinalIgnoreCase))
         {
             await _next(context);
             return;

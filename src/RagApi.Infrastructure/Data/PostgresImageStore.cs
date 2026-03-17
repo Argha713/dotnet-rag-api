@@ -51,7 +51,8 @@ public class PostgresImageStore : IImageStore
         // Argha - 2026-03-17 - #37 - OpenConnectionAsync returns an already-open connection.
         // Connection is intentionally NOT closed here — it is handed off to NpgsqlImageStream
         // and disposed by ASP.NET Core's FileStreamResult after the response is written.
-        var workspaceId = _workspaceContext.Current.Id;
+        // Argha - 2026-03-17 - #39 - No workspace filter: GUID is the capability token.
+        // Workspace is enforced at write time (SaveAsync); read is open-by-GUID.
         var conn = await _dataSource.OpenConnectionAsync(ct);
 
         var cmd = conn.CreateCommand();
@@ -61,10 +62,9 @@ public class PostgresImageStore : IImageStore
             """
             SELECT "ContentType", "Data"
             FROM "DocumentImages"
-            WHERE "Id" = @id AND "WorkspaceId" = @workspaceId
+            WHERE "Id" = @id
             """;
         cmd.Parameters.AddWithValue("id", id);
-        cmd.Parameters.AddWithValue("workspaceId", workspaceId);
 
         var reader = await cmd.ExecuteReaderAsync(
             CommandBehavior.SequentialAccess | CommandBehavior.SingleRow, ct);
