@@ -300,7 +300,7 @@ Cors__AllowedOrigins__0=https://your-frontend.azurestaticapps.net
 | **Frontend** | Blazor WebAssembly (.NET 8) — Inter design system, indigo theme |
 | **Hosting** | Azure Container Apps + Azure Static Web Apps |
 | **CI/CD** | GitHub Actions → GHCR → Azure |
-| **Testing** | xUnit, Moq, FluentAssertions (324 tests) |
+| **Testing** | xUnit, Moq, FluentAssertions (328 tests) |
 | **API Docs** | Swagger / OpenAPI |
 
 ---
@@ -316,7 +316,7 @@ dotnet-rag-api/
 │   ├── RagApi.Domain/           # Core entities
 │   └── RagApi.Infrastructure/   # Qdrant, OpenAI, Azure, EF Core
 ├── tests/
-│   └── RagApi.Tests/            # 324 unit tests
+│   └── RagApi.Tests/            # 328 unit tests
 ├── .github/workflows/           # CI, Deploy API, Deploy UI
 ├── docker-compose.yml           # Local Qdrant + Ollama + PostgreSQL
 ├── Dockerfile                   # Production container image
