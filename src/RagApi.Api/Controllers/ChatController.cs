@@ -106,7 +106,10 @@ public class ChatController : ControllerBase
                 DocumentId = s.DocumentId,
                 FileName = s.FileName,
                 RelevantText = s.RelevantText,
-                RelevanceScore = s.RelevanceScore
+                RelevanceScore = s.RelevanceScore,
+                // Argha - 2026-03-17 - #38 - Forward image fields so client can fetch raw image bytes
+                ImageId = s.ImageId,
+                IsImage = s.IsImage
             }).ToList()
         };
 

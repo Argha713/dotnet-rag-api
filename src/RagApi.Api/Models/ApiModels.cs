@@ -106,6 +106,9 @@ public class SourceDto
     public string FileName { get; set; } = string.Empty;
     public string RelevantText { get; set; } = string.Empty;
     public double RelevanceScore { get; set; }
+    // Argha - 2026-03-17 - #38 - Image reference fields so UI can construct GET /api/images/{id} URL
+    public Guid? ImageId { get; set; }
+    public bool IsImage { get; set; }
 }
 
 /// <summary>

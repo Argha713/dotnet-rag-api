@@ -24,6 +24,9 @@ public class SourceCitationDto
     public string RelevantText { get; set; } = string.Empty;
     public double RelevanceScore { get; set; }
     public int ChunkIndex { get; set; }
+    // Argha - 2026-03-17 - #38 - Image reference fields so UI can construct GET /api/images/{id} URL
+    public Guid? ImageId { get; set; }
+    public bool IsImage { get; set; }
 }
 
 public class SearchRequest

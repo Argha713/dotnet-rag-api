@@ -323,6 +323,93 @@ public class RagServiceTests
         }
     }
 
+    // Argha - 2026-03-17 - #38 - Image metadata mapping tests for SourceCitation
+
+    [Fact]
+    public async Task ChatAsync_WithImageChunkMetadata_MapsImageIdAndIsImageOnSource()
+    {
+        // Arrange
+        var imageId = Guid.NewGuid();
+        var searchResults = new List<SearchResult>
+        {
+            new()
+            {
+                ChunkId = Guid.NewGuid(), DocumentId = Guid.NewGuid(), FileName = "manual.pdf",
+                Content = "Figure 1 description", Score = 0.95, ChunkIndex = 0,
+                Metadata = new Dictionary<string, string> { ["isImage"] = "true", ["imageId"] = imageId.ToString() }
+            }
+        };
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(searchResults);
+        _chatServiceMock.Setup(c => c.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Answer");
+
+        // Act
+        var result = await _sut.ChatAsync("show me the figure");
+
+        // Assert
+        result.Sources[0].IsImage.Should().BeTrue();
+        result.Sources[0].ImageId.Should().Be(imageId);
+    }
+
+    [Fact]
+    public async Task ChatAsync_WithTextChunkMetadata_HasNullImageIdAndFalseIsImage()
+    {
+        // Arrange
+        var searchResults = new List<SearchResult>
+        {
+            new()
+            {
+                ChunkId = Guid.NewGuid(), DocumentId = Guid.NewGuid(), FileName = "doc.txt",
+                Content = "Some text content", Score = 0.9, ChunkIndex = 0,
+                Metadata = new Dictionary<string, string>()
+            }
+        };
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(searchResults);
+        _chatServiceMock.Setup(c => c.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Answer");
+
+        // Act
+        var result = await _sut.ChatAsync("query");
+
+        // Assert
+        result.Sources[0].IsImage.Should().BeFalse();
+        result.Sources[0].ImageId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ChatStreamAsync_WithImageChunkMetadata_MapsImageIdAndIsImageOnSource()
+    {
+        // Arrange
+        var imageId = Guid.NewGuid();
+        var searchResults = new List<SearchResult>
+        {
+            new()
+            {
+                ChunkId = Guid.NewGuid(), DocumentId = Guid.NewGuid(), FileName = "manual.pdf",
+                Content = "Diagram description", Score = 0.95, ChunkIndex = 0,
+                Metadata = new Dictionary<string, string> { ["isImage"] = "true", ["imageId"] = imageId.ToString() }
+            }
+        };
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(searchResults);
+        _chatServiceMock.Setup(c => c.GenerateResponseStreamAsync(It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateTestTokenStream("Answer"));
+
+        // Act
+        StreamEvent? sourcesEvent = null;
+        await foreach (var evt in _sut.ChatStreamAsync("show me the diagram"))
+        {
+            if (evt.Type == "sources") sourcesEvent = evt;
+        }
+
+        // Assert
+        sourcesEvent.Should().NotBeNull();
+        sourcesEvent!.Sources![0].IsImage.Should().BeTrue();
+        sourcesEvent.Sources[0].ImageId.Should().Be(imageId);
+    }
+
     private static List<SearchResult> CreateSearchResults(int count)
     {
         return Enumerable.Range(0, count).Select(i => new SearchResult
@@ -332,7 +419,8 @@ public class RagServiceTests
             FileName = $"doc{i}.txt",
             Content = $"Content of chunk {i}",
             Score = 0.9 - (i * 0.1),
-            ChunkIndex = i
+            ChunkIndex = i,
+            Metadata = new Dictionary<string, string>()
         }).ToList();
     }
 }
