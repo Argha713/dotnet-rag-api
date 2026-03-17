@@ -161,11 +161,11 @@ else
                                             </div>
                                             <a href="@(_apiBaseUrl)/api/images/@src.ImageId"
                                                target="_blank"
-                                               rel="noopener"
+                                               rel="noopener noreferrer"
                                                title="Open full image"
                                                style="display:block; border-radius:var(--radius-sm);">
                                                 <img src="@(_apiBaseUrl)/api/images/@src.ImageId"
-                                                     alt=""
+                                                     alt="@src.RelevantText"
                                                      loading="lazy"
                                                      class="source-image-preview" />
                                             </a>
