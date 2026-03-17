@@ -3,6 +3,7 @@ using Azure.Search.Documents.Indexes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using RagApi.Application.Interfaces;
 using RagApi.Application.Models;
 using RagApi.Application.Services;
@@ -94,6 +95,11 @@ public static class DependencyInjection
         AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
         var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required");
+
+        // Argha - 2026-03-17 - #37 - NpgsqlDataSource singleton for streaming image bytes (zero-copy path).
+        // Independent pool from EF Core's pool — same connection string, different lifecycle.
+        services.AddSingleton(NpgsqlDataSource.Create(connectionString));
+
         services.AddDbContext<RagApiDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IDocumentRepository, DocumentRepository>();
 

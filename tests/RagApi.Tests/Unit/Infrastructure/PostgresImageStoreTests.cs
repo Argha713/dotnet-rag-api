@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Moq;
+using Npgsql;
 using RagApi.Application.Interfaces;
 using RagApi.Domain.Entities;
 using RagApi.Infrastructure.Data;
@@ -12,6 +13,10 @@ public class PostgresImageStoreTests : IDisposable
 {
     private readonly RagApiDbContext _dbContext;
     private readonly PostgresImageStore _sut;
+    // Argha - 2026-03-17 - #37 - NpgsqlDataSource is abstract; cannot be mocked by Moq.
+    // Hold a real instance (dummy connection string) so the ctor param is satisfied.
+    // Tests here never call GetStreamAsync so no real connection is ever opened.
+    private readonly NpgsqlDataSource _dataSource;
 
     // Use Guid.Empty so images seeded directly via _dbContext (which default to Guid.Empty
     // WorkspaceId) match the workspace filter in PostgresImageStore
@@ -32,10 +37,15 @@ public class PostgresImageStoreTests : IDisposable
             CollectionName = "documents"
         });
 
-        _sut = new PostgresImageStore(_dbContext, workspaceContext.Object);
+        _dataSource = NpgsqlDataSource.Create("Host=localhost;Database=test");
+        _sut = new PostgresImageStore(_dbContext, workspaceContext.Object, _dataSource);
     }
 
-    public void Dispose() => _dbContext.Dispose();
+    public void Dispose()
+    {
+        _dbContext.Dispose();
+        _dataSource.Dispose();
+    }
 
     [Fact]
     public async Task SaveAsync_InsertsRowAndReturnsId()
