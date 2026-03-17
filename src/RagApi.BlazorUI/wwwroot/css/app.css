@@ -340,6 +340,30 @@ html, body {
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
+.source-image-badge {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    color: var(--text-secondary);
+    background: var(--bg-surface);
+    border: 1px solid var(--primary-mid);
+    border-radius: var(--radius-sm);
+    padding: 1px 6px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+.source-image-preview {
+    display: block;
+    max-width: 100%;
+    border-radius: var(--radius-sm);
+    margin-top: var(--space-2);
+    cursor: pointer;
+}
+.source-caption {
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+    margin-top: var(--space-1);
+    margin-bottom: 0;
+}
 
 /* Input area */
 .input-area {
