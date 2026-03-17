@@ -118,7 +118,10 @@ Remember: Only use information from the context above. Do not make up informatio
                 FileName = r.FileName,
                 RelevantText = TruncateText(r.Content, 200),
                 RelevanceScore = r.Score,
-                ChunkIndex = r.ChunkIndex
+                ChunkIndex = r.ChunkIndex,
+                // Argha - 2026-03-17 - #38 - Propagate image metadata from chunk so API and UI can render images inline
+                IsImage = r.Metadata.TryGetValue("isImage", out var isImg) && isImg == "true",
+                ImageId = r.Metadata.TryGetValue("imageId", out var imgId) && Guid.TryParse(imgId, out var parsedId) ? parsedId : null
             }).ToList(),
             Model = _chatService.ModelName
         };
@@ -155,7 +158,10 @@ Remember: Only use information from the context above. Do not make up informatio
             FileName = r.FileName,
             RelevantText = TruncateText(r.Content, 200),
             RelevanceScore = r.Score,
-            ChunkIndex = r.ChunkIndex
+            ChunkIndex = r.ChunkIndex,
+            // Argha - 2026-03-17 - #38 - Propagate image metadata from chunk so API and UI can render images inline
+            IsImage = r.Metadata.TryGetValue("isImage", out var isImg) && isImg == "true",
+            ImageId = r.Metadata.TryGetValue("imageId", out var imgId) && Guid.TryParse(imgId, out var parsedId) ? parsedId : null
         }).ToList();
 
         // Argha - 2026-02-19 - Yield sources first so the client can render citations while tokens stream in

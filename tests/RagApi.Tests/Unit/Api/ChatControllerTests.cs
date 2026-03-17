@@ -332,6 +332,35 @@ public class ChatControllerTests
         _vectorStoreMock.Verify(v => v.SearchAsync(It.IsAny<string>(), TestEmbedding, 5, null, tags, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Argha - 2026-03-17 - #38 - SourceDto image field mapping test
+    [Fact]
+    public async Task Chat_MapsImageFieldsFromSourceCitationToSourceDto()
+    {
+        // Arrange
+        var imageId = Guid.NewGuid();
+        var searchResults = new List<SearchResult>
+        {
+            new()
+            {
+                ChunkId = Guid.NewGuid(), DocumentId = Guid.NewGuid(), FileName = "manual.pdf",
+                Content = "Figure description", Score = 0.9, ChunkIndex = 0,
+                Metadata = new Dictionary<string, string> { ["isImage"] = "true", ["imageId"] = imageId.ToString() }
+            }
+        };
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<Guid?>(), It.IsAny<List<string>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(searchResults);
+        _chatMock.Setup(c => c.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Answer");
+
+        // Act
+        var result = await _sut.Chat(new ChatRequest { Query = "test" }, CancellationToken.None);
+
+        // Assert
+        var dto = ((OkObjectResult)result).Value as ChatResponseDto;
+        dto!.Sources[0].IsImage.Should().BeTrue();
+        dto.Sources[0].ImageId.Should().Be(imageId);
+    }
+
     // Argha - 2026-02-19 - Overload without explicit cancellation token for call-site convenience
     private static async IAsyncEnumerable<string> CreateTestTokenStream(params string[] tokens)
     {
