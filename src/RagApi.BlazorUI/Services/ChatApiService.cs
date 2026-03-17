@@ -15,6 +15,10 @@ public class ChatApiService
         _http = http;
     }
 
+    // Argha - 2026-03-17 - #39 - Expose base URL so Chat.razor can construct image src URLs
+    // without re-reading IConfiguration; BaseAddress is set by Program.cs from ApiBaseUrl config
+    public string BaseUrl => _http.BaseAddress?.ToString().TrimEnd('/') ?? string.Empty;
+
     public async Task<ChatResponseDto> ChatAsync(ChatRequest request, CancellationToken ct = default)
     {
         var response = await _http.PostAsJsonAsync("/api/chat", request, _jsonOptions, ct);

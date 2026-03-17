@@ -148,15 +148,41 @@ else
                                     </svg>
                                     @msg.Sources.Count source@(msg.Sources.Count == 1 ? "" : "s") used
                                 </summary>
+                                @* Argha - 2026-03-17 - #39 - Branch on IsImage: render inline image card or text excerpt *@
                                 @foreach (var src in msg.Sources)
                                 {
-                                    <div class="source-item">
-                                        <div class="source-header">
-                                            <span class="source-filename">@src.FileName</span>
-                                            <span class="source-score">@src.RelevanceScore.ToString("P0")</span>
+                                    @if (src.IsImage && src.ImageId.HasValue)
+                                    {
+                                        <div class="source-item">
+                                            <div class="source-header">
+                                                <span class="source-filename">@src.FileName</span>
+                                                <span class="source-image-badge">IMAGE</span>
+                                                <span class="source-score">@src.RelevanceScore.ToString("P0")</span>
+                                            </div>
+                                            <a href="@(_apiBaseUrl)/api/images/@src.ImageId"
+                                               target="_blank"
+                                               rel="noopener noreferrer"
+                                               title="Open full image"
+                                               style="display:block; border-radius:var(--radius-sm);">
+                                                <img src="@(_apiBaseUrl)/api/images/@src.ImageId"
+                                                     alt="@src.RelevantText"
+                                                     loading="lazy"
+                                                     class="source-image-preview" />
+                                            </a>
+                                            <p class="source-caption">@src.RelevantText</p>
                                         </div>
-                                        <p class="source-text">@src.RelevantText</p>
-                                    </div>
+                                    }
+                                    else
+                                    {
+                                        @* Text source — or IsImage=true with null ImageId (malformed data fallback) *@
+                                        <div class="source-item">
+                                            <div class="source-header">
+                                                <span class="source-filename">@src.FileName</span>
+                                                <span class="source-score">@src.RelevanceScore.ToString("P0")</span>
+                                            </div>
+                                            <p class="source-text">@src.RelevantText</p>
+                                        </div>
+                                    }
                                 }
                             </details>
                         }
@@ -226,6 +252,8 @@ else
     private string _inputText = string.Empty;
     private bool _isStreaming = false;
     private string _errorMessage = string.Empty;
+    // Argha - 2026-03-17 - #39 - API base URL for constructing image src attributes
+    private string _apiBaseUrl = string.Empty;
 
     private ElementReference _messagesContainer;
     private CancellationTokenSource? _streamCts;
@@ -241,6 +269,8 @@ else
     {
         // Argha - 2026-03-04 - #17 - Subscribe early so workspace switches reload conversation list
         WsState.OnChanged += OnWorkspaceChanged;
+        // Argha - 2026-03-17 - #39 - Capture base URL once; used to build /api/images/{id} src attributes
+        _apiBaseUrl = ChatService.BaseUrl;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

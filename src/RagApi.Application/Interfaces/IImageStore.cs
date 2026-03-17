@@ -15,7 +15,7 @@ public interface IImageStore
     Task<DocumentImage?> GetAsync(Guid id, CancellationToken ct = default);
 
     // Argha - 2026-03-17 - #37 - Streams image bytes directly from storage without server-side buffering.
-    // Returns null when no image with the given id exists in the current workspace.
+    // Returns null when no image with the given id exists.
     // Caller must dispose the result (or its Body stream) after consuming it.
     Task<ImageStreamResult?> GetStreamAsync(Guid id, CancellationToken ct = default);
 

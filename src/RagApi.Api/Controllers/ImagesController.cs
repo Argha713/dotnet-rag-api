@@ -4,7 +4,8 @@ using RagApi.Application.Interfaces;
 namespace RagApi.Api.Controllers;
 
 // Argha - 2026-03-17 - #37 - Serves stored image bytes for multimodal RAG chat responses.
-// Workspace-scoped via ApiKeyMiddleware + IWorkspaceContext (set before this controller runs).
+// Argha - 2026-03-17 - #39 - Auth bypassed for /api/images: GUID is the capability token;
+// ApiKeyMiddleware does not set IWorkspaceContext for requests to this controller.
 [ApiController]
 [Route("api/[controller]")]
 public class ImagesController : ControllerBase
@@ -13,8 +14,8 @@ public class ImagesController : ControllerBase
 
     public ImagesController(IImageStore imageStore) => _imageStore = imageStore;
 
-    // Argha - 2026-03-17 - #37 - Streams image bytes. 404 if image does not exist or belongs
-    // to a different workspace. Cache-Control set to 1 day — images are immutable once stored.
+    // Argha - 2026-03-17 - #39 - 404 if image does not exist.
+    // Cache-Control set to 1 day — images are immutable once stored.
     [HttpGet("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

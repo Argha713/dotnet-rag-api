@@ -30,6 +30,8 @@ public class PostgresImageStoreStreamTests : IAsyncLifetime
     // Argha - 2026-03-17 - #37 - Parent rows seeded once for the whole class; cleaned up in DisposeAsync
     private Guid _testDocumentId = Guid.NewGuid();
     private readonly List<Guid> _seededImageIds = new();
+    // Argha - 2026-03-17 - #39 - Extra workspace rows seeded by individual tests; cleaned up in DisposeAsync
+    private readonly List<Guid> _seededWorkspaceIds = new();
 
     public PostgresImageStoreStreamTests()
     {
@@ -108,6 +110,12 @@ public class PostgresImageStoreStreamTests : IAsyncLifetime
             await _dbContext.SaveChangesAsync();
         }
 
+        // Argha - 2026-03-17 - #39 - Clean up extra workspace rows seeded by individual tests
+        foreach (var wsId in _seededWorkspaceIds)
+        {
+            await _dbContext.Set<Workspace>().Where(w => w.Id == wsId).ExecuteDeleteAsync();
+        }
+
         var doc = await _dbContext.Documents.FindAsync(_testDocumentId);
         if (doc is not null)
         {
@@ -168,13 +176,13 @@ public class PostgresImageStoreStreamTests : IAsyncLifetime
     // ── Test 2 ────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetStreamAsync_ReturnsNull_WhenWorkspaceIdDoesNotMatch()
+    public async Task GetStreamAsync_ReturnsImage_WhenImageBelongsToDifferentWorkspace()
     {
-        // Argha - 2026-03-17 - #37 - Image belongs to a different workspace; the IWorkspaceContext
-        // mock resolves to TestWorkspaceId, so the query's workspace filter will not match
+        // Argha - 2026-03-17 - #39 - Workspace filter removed from GetStreamAsync; GUID is the
+        // capability token so an image in another workspace must still be reachable by ID
         var otherWorkspaceId = Guid.NewGuid();
 
-        // Argha - 2026-03-17 - #37 - Seed a second Workspace row so the FK constraint is satisfied
+        // Argha - 2026-03-17 - #39 - Seed a second Workspace row so the FK constraint is satisfied
         var otherWorkspace = new Workspace
         {
             Id = otherWorkspaceId,
@@ -185,6 +193,8 @@ public class PostgresImageStoreStreamTests : IAsyncLifetime
         };
         _dbContext.Workspaces.Add(otherWorkspace);
         await _dbContext.SaveChangesAsync();
+        // Argha - 2026-03-17 - #39 - Track for cleanup in DisposeAsync (consistent with _seededImageIds pattern)
+        _seededWorkspaceIds.Add(otherWorkspaceId);
 
         var image = await SeedImageAsync(workspaceId: otherWorkspaceId);
 
@@ -192,13 +202,13 @@ public class PostgresImageStoreStreamTests : IAsyncLifetime
 
         try
         {
-            result.Should().BeNull();
+            // Argha - 2026-03-17 - #39 - No workspace filter: image found regardless of workspace
+            result.Should().NotBeNull();
         }
         finally
         {
-            // Argha - 2026-03-17 - #37 - Clean up extra workspace row created in this test
-            _dbContext.Workspaces.Remove(otherWorkspace);
-            await _dbContext.SaveChangesAsync();
+            if (result is not null)
+                await result.DisposeAsync();
         }
     }
 

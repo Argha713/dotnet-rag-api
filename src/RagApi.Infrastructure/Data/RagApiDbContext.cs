@@ -144,7 +144,9 @@ public class RagApiDbContext : DbContext
             // ordered by page (used by PostgresImageStore #33)
             entity.HasIndex(i => new { i.DocumentId, i.PageNumber });
 
-            // Argha - 2026-03-16 - #30 - Workspace-scoped single-record fetch for GET /api/images/{id} (#37)
+            // Argha - 2026-03-16 - #30 - Workspace-scoped fetch for GetAsync (EF metadata path).
+            // Argha - 2026-03-17 - #39 - GetStreamAsync no longer uses this index; it queries by Id only
+            // (GUID is the capability token — see PostgresImageStore.GetStreamAsync)
             entity.HasIndex(i => new { i.WorkspaceId, i.Id });
         });
     }
