@@ -29,6 +29,9 @@ public class AzureAiSearchVectorStore : IVectorStore
     private const string FieldContentType = "contentType";
     private const string FieldTags = "tags";
     private const string FieldEmbedding = "embedding";
+    // Argha - 2026-03-18 - #55 - Image metadata fields mirroring Qdrant payload schema
+    private const string FieldIsImage = "isImage";
+    private const string FieldImageId = "imageId";
 
     private readonly SearchIndexClient _indexClient;
     private readonly AzureAiSearchSettings _settings;
@@ -174,6 +177,9 @@ public class AzureAiSearchVectorStore : IVectorStore
         options.Select.Add(FieldFileName);
         options.Select.Add(FieldChunkIndex);
         options.Select.Add(FieldContentType);
+        // Argha - 2026-03-18 - #55 - Select image metadata fields so they are returned in results
+        options.Select.Add(FieldIsImage);
+        options.Select.Add(FieldImageId);
 
         var response = await searchClient.SearchAsync<SearchDocument>(
             searchText: query,
@@ -284,6 +290,9 @@ public class AzureAiSearchVectorStore : IVectorStore
                 new SimpleField(FieldEndPosition, SearchFieldDataType.Int32),
                 new SimpleField(FieldContentType, SearchFieldDataType.String),
                 new SimpleField(FieldTags, SearchFieldDataType.Collection(SearchFieldDataType.String)) { IsFilterable = true },
+                // Argha - 2026-03-18 - #55 - Image metadata fields
+                new SimpleField(FieldIsImage, SearchFieldDataType.String),
+                new SimpleField(FieldImageId, SearchFieldDataType.String),
                 new VectorSearchField(FieldEmbedding, _settings.EmbeddingDimension, "hnsw-profile")
             }
         };
@@ -317,6 +326,9 @@ public class AzureAiSearchVectorStore : IVectorStore
         options.Select.Add(FieldFileName);
         options.Select.Add(FieldChunkIndex);
         options.Select.Add(FieldContentType);
+        // Argha - 2026-03-18 - #55 - Select image metadata fields so they are returned in results
+        options.Select.Add(FieldIsImage);
+        options.Select.Add(FieldImageId);
 
         if (includeEmbedding)
             options.Select.Add(FieldEmbedding);
@@ -388,9 +400,12 @@ public class AzureAiSearchVectorStore : IVectorStore
             FileName = doc.GetString(FieldFileName) ?? string.Empty,
             ChunkIndex = doc.TryGetValue(FieldChunkIndex, out var ci) ? Convert.ToInt32(ci) : 0,
             Score = score,
+            // Argha - 2026-03-18 - #55 - Read image metadata back; guard against old index docs lacking the keys
             Metadata = new Dictionary<string, string>
             {
-                ["contentType"] = doc.GetString(FieldContentType) ?? string.Empty
+                ["contentType"] = doc.GetString(FieldContentType) ?? string.Empty,
+                ["isImage"] = doc.GetString(FieldIsImage) ?? "false",
+                ["imageId"] = doc.GetString(FieldImageId) ?? ""
             },
             Embedding = embedding
         };
@@ -408,6 +423,9 @@ public class AzureAiSearchVectorStore : IVectorStore
             [FieldStartPosition] = chunk.StartPosition,
             [FieldEndPosition] = chunk.EndPosition,
             [FieldContentType] = chunk.Metadata.GetValueOrDefault("contentType", ""),
+            // Argha - 2026-03-18 - #55 - Persist image metadata so search results can surface IsImage/ImageId
+            [FieldIsImage] = chunk.Metadata.GetValueOrDefault("isImage", "false"),
+            [FieldImageId] = chunk.Metadata.GetValueOrDefault("imageId", ""),
             [FieldTags] = chunk.Tags,
             [FieldEmbedding] = chunk.Embedding
         };

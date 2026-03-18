@@ -177,18 +177,18 @@ public class DocumentProcessorTests
     }
 
     [Fact]
-    public async Task ExtractImagesAsync_DocxWithPng100x100_ReturnsOneImage()
+    public async Task ExtractImagesAsync_DocxWithPng50x50_ReturnsOneImage()
     {
-        // Argha - 2026-03-16 - #35 - 100x100 PNG meets minimum threshold; must be returned
-        var pngBytes = MakeFakePngHeader(100, 100);
+        // Argha - 2026-03-18 - #55 - 50x50 PNG meets minimum threshold (lowered from 100); must be returned
+        var pngBytes = MakeFakePngHeader(50, 50);
         using var stream = new MemoryStream(CreateDocxWithImage(pngBytes, "image/png"));
         var result = await _sut.ExtractImagesAsync(
             stream,
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
         result.Should().HaveCount(1);
         result[0].MimeType.Should().Be("image/png");
-        result[0].WidthPx.Should().Be(100);
-        result[0].HeightPx.Should().Be(100);
+        result[0].WidthPx.Should().Be(50);
+        result[0].HeightPx.Should().Be(50);
         result[0].PageNumber.Should().Be(0);
         result[0].ImageIndex.Should().Be(0);
     }
@@ -196,8 +196,8 @@ public class DocumentProcessorTests
     [Fact]
     public async Task ExtractImagesAsync_DocxWithSmallPng_IsSkipped()
     {
-        // Argha - 2026-03-16 - #35 - 50x50 PNG is below the 100x100 threshold; must be skipped
-        var smallPngBytes = MakeFakePngHeader(50, 50);
+        // Argha - 2026-03-18 - #55 - 49x49 PNG is below the 50x50 threshold; must be skipped
+        var smallPngBytes = MakeFakePngHeader(49, 49);
         using var stream = new MemoryStream(CreateDocxWithImage(smallPngBytes, "image/png"));
         var result = await _sut.ExtractImagesAsync(
             stream,
@@ -237,7 +237,7 @@ public class DocumentProcessorTests
     [Fact]
     public async Task ExtractImagesAsync_DocxWithMultipleImages_HasSequentialIndices()
     {
-        // Argha - 2026-03-16 - #35 - Two 100x100 PNGs must get ImageIndex 0 and 1 respectively
+        // Argha - 2026-03-18 - #55 - Two 100x100 PNGs (above the 50x50 threshold) must get ImageIndex 0 and 1 respectively
         var png1 = MakeFakePngHeader(100, 100);
         var png2 = MakeFakePngHeader(200, 200);
 

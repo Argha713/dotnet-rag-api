@@ -322,8 +322,8 @@ public class DocumentProcessor : IDocumentProcessor
 
             foreach (var image in page.GetImages())
             {
-                // Argha - 2026-03-16 - #34 - Skip decorative/icon images below minimum dimension threshold
-                if (image.WidthInSamples < 100 || image.HeightInSamples < 100)
+                // Argha - 2026-03-18 - #55 - Skip decorative/icon images below minimum dimension threshold (lowered from 100 to 50)
+                if (image.WidthInSamples < 50 || image.HeightInSamples < 50)
                     continue;
 
                 // Argha - 2026-03-18 - #52 - JBIG2 has no viable free .NET decoder; log and skip
@@ -423,9 +423,9 @@ public class DocumentProcessor : IDocumentProcessor
             if (bytes.Length > MaxBytes)
                 continue;
 
-            // Argha - 2026-03-16 - #35 - Apply 100x100 filter when dimensions are readable; include if unreadable
+            // Argha - 2026-03-18 - #55 - Apply 50x50 filter when dimensions are readable (lowered from 100); include if unreadable
             var (width, height) = TryGetImageDimensions(bytes, mimeType);
-            if (width.HasValue && height.HasValue && (width.Value < 100 || height.Value < 100))
+            if (width.HasValue && height.HasValue && (width.Value < 50 || height.Value < 50))
                 continue;
 
             results.Add(new ExtractedImage(
