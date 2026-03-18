@@ -8,7 +8,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 [![Deploy](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml/badge.svg)](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat&logo=dotnet)
 ![C#](https://img.shields.io/badge/C%23-12-239120?style=flat&logo=csharp)
-![Tests](https://img.shields.io/badge/tests-328%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-330%20passing-brightgreen)
 ![Phase](https://img.shields.io/badge/phase-14.8%20image%20sources%20UI-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 

@@ -35,10 +35,14 @@ public class DocumentService
     private readonly IVisionService? _visionService;
     private readonly IImageStore? _imageStore;
 
+    // Argha - 2026-03-18 - #52 - Maximum images to describe per document; caps GPT-4o-mini cost per upload
+    private readonly int _maxImagesPerDocument;
+
     // Argha - 2026-02-20 - Added IOptions<DocumentProcessingOptions> for configurable chunking
     // Argha - 2026-02-21 - Added IOptions<BatchUploadOptions> for batch upload settings
     // Argha - 2026-03-04 - #17 - Added IWorkspaceContext for per-request collection name
     // Argha - 2026-03-17 - #36 - Added optional IVisionService + IImageStore for multimodal ingestion
+    // Argha - 2026-03-18 - #52 - Added optional IOptions<VisionOptions> for cost guard (MaxImagesPerDocument)
     public DocumentService(
         IDocumentProcessor documentProcessor,
         IEmbeddingService embeddingService,
@@ -49,7 +53,8 @@ public class DocumentService
         IWorkspaceContext workspaceContext,
         IOptions<BatchUploadOptions>? batchOptions = null,
         IVisionService? visionService = null,
-        IImageStore? imageStore = null)
+        IImageStore? imageStore = null,
+        IOptions<VisionOptions>? visionOptions = null)
     {
         _documentProcessor = documentProcessor;
         _embeddingService = embeddingService;
@@ -62,6 +67,7 @@ public class DocumentService
         _batchOptions = batchOptions?.Value ?? new BatchUploadOptions();
         _visionService = visionService;
         _imageStore = imageStore;
+        _maxImagesPerDocument = visionOptions?.Value.MaxImagesPerDocument ?? 20;
     }
 
     /// <summary>
@@ -439,6 +445,15 @@ public class DocumentService
                 };
                 chunks.Add(chunk);
                 succeeded++;
+
+                // Argha - 2026-03-18 - #52 - Stop after limit to cap GPT-4o-mini cost per upload
+                if (succeeded >= _maxImagesPerDocument)
+                {
+                    _logger.LogInformation(
+                        "Vision pipeline: reached MaxImagesPerDocument limit ({Limit}) for document {DocumentId} — stopping",
+                        _maxImagesPerDocument, documentId);
+                    break;
+                }
             }
             catch (Exception ex)
             {

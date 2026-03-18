@@ -691,4 +691,41 @@ public class DocumentServiceVisionPipelineTests
         // Assert
         _imageStoreMock.Verify(s => s.DeleteByDocumentAsync(docId, It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    // Argha - 2026-03-18 - #52 - Cost guard: RunVisionPipelineAsync must stop after MaxImagesPerDocument
+    [Fact]
+    public async Task Upload_VisionEnabled_StopsDescribingAtMaxImagesPerDocument()
+    {
+        // Arrange: 25 images extracted, limit is 5
+        _visionMock.Setup(v => v.IsEnabled).Returns(true);
+        var sut = new DocumentService(
+            _processorMock.Object,
+            _embeddingMock.Object,
+            _vectorStoreMock.Object,
+            _loggerMock.Object,
+            _repositoryMock.Object,
+            Options.Create(new DocumentProcessingOptions()),
+            _workspaceContextMock.Object,
+            visionService: _visionMock.Object,
+            imageStore: _imageStoreMock.Object,
+            visionOptions: Options.Create(new VisionOptions { MaxImagesPerDocument = 5 }));
+
+        SetupTextPipeline();
+        var images = Enumerable.Range(0, 25).Select(i => MakeImage(i + 1, i)).ToList();
+        _processorMock.Setup(p => p.ExtractImagesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(images);
+        _visionMock.Setup(v => v.DescribeImageAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("A diagram");
+        _imageStoreMock.Setup(s => s.SaveAsync(It.IsAny<DocumentImage>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Guid.NewGuid());
+        using var stream = new MemoryStream(new byte[10]);
+
+        // Act
+        await sut.UploadDocumentAsync(stream, "doc.pdf", "application/pdf");
+
+        // Assert: only 5 descriptions requested despite 25 images
+        _visionMock.Verify(
+            v => v.DescribeImageAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            Times.Exactly(5));
+    }
 }

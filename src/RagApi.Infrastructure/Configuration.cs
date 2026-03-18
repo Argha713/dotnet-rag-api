@@ -50,11 +50,14 @@ public class VisionConfiguration
 {
     public const string SectionName = "Vision";
 
-    // Argha - 2026-03-16 - #32 - When false, NullVisionService is registered and image description is skipped
-    public bool Enabled { get; set; } = false;
+    // Argha - 2026-03-18 - #52 - Default true; NullVisionService is registered when Provider != OpenAI, so local Ollama dev is unaffected
+    public bool Enabled { get; set; } = true;
 
     // Argha - 2026-03-16 - #32 - gpt-4o-mini balances cost and quality for document image description
     public string Model { get; set; } = "gpt-4o-mini";
+
+    // Argha - 2026-03-18 - #52 - Cap GPT-4o-mini calls per upload; ~$0.003 ceiling at 20 images
+    public int MaxImagesPerDocument { get; set; } = 20;
 }
 
 /// <summary>

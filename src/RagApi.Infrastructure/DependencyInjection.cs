@@ -58,6 +58,8 @@ public static class DependencyInjection
 
         // Argha - 2026-03-16 - #32 - Vision service: real impl only when enabled + provider is OpenAI
         services.Configure<VisionConfiguration>(configuration.GetSection(VisionConfiguration.SectionName));
+        // Argha - 2026-03-18 - #52 - Register Application-layer VisionOptions (MaxImagesPerDocument) from same section
+        services.Configure<VisionOptions>(configuration.GetSection(VisionOptions.SectionName));
         var visionConfig = configuration.GetSection(VisionConfiguration.SectionName)
             .Get<VisionConfiguration>() ?? new VisionConfiguration();
 

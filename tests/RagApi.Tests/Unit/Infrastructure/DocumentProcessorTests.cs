@@ -5,6 +5,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
 using RagApi.Application.Interfaces;
+using RagApi.Application.Models;
 using RagApi.Infrastructure.DocumentProcessing;
 using UglyToad.PdfPig.Writer;
 
@@ -342,5 +343,13 @@ public class DocumentProcessorTests
         var result = await _sut.ExtractImagesAsync(stream, "application/pdf");
 
         result.Should().BeEmpty();
+    }
+
+    // Argha - 2026-03-18 - #52 - VisionOptions default cost-guard ceiling
+    [Fact]
+    public void VisionOptions_DefaultMaxImagesPerDocument_IsTwenty()
+    {
+        var options = new VisionOptions();
+        options.MaxImagesPerDocument.Should().Be(20);
     }
 }

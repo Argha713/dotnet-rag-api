@@ -326,10 +326,16 @@ public class DocumentProcessor : IDocumentProcessor
                 if (image.WidthInSamples < 100 || image.HeightInSamples < 100)
                     continue;
 
-                // Argha - 2026-03-16 - #34 - Determine filter; skip unsupported compression formats
+                // Argha - 2026-03-18 - #52 - JBIG2 has no viable free .NET decoder; log and skip
+                // CCITTFaxDecode is handled by PdfPig's internal CcittFaxDecodeFilter via TryGetPng()
                 var filterName = GetImageFilterName(image);
-                if (filterName is "JBIG2Decode" or "CCITTFaxDecode")
+                if (filterName is "JBIG2Decode")
+                {
+                    _logger.LogDebug(
+                        "Skipping JBIG2Decode image on page {Page} — no free .NET decoder available",
+                        pageNumber);
                     continue;
+                }
 
                 byte[] bytes;
                 string mimeType;
