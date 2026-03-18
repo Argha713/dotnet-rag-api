@@ -189,6 +189,9 @@ public class QdrantVectorStore : IVectorStore
                     ["endPosition"] = chunk.EndPosition,
                     ["fileName"] = chunk.Metadata.GetValueOrDefault("fileName", ""),
                     ["contentType"] = chunk.Metadata.GetValueOrDefault("contentType", ""),
+                    // Argha - 2026-03-18 - #55 - Persist image metadata so search results can surface IsImage/ImageId
+                    ["isImage"] = chunk.Metadata.GetValueOrDefault("isImage", "false"),
+                    ["imageId"] = chunk.Metadata.GetValueOrDefault("imageId", ""),
                     // Argha - 2026-02-19 - Store tags as list payload for keyword filtering
                     ["tags"] = tagsValue
                 }
@@ -238,9 +241,12 @@ public class QdrantVectorStore : IVectorStore
                 Content = r.Payload["content"].StringValue,
                 Score = r.Score,
                 ChunkIndex = (int)r.Payload["chunkIndex"].IntegerValue,
+                // Argha - 2026-03-18 - #55 - Read image metadata back from payload; guard against old points lacking the keys
                 Metadata = new Dictionary<string, string>
                 {
-                    ["contentType"] = r.Payload["contentType"].StringValue
+                    ["contentType"] = r.Payload["contentType"].StringValue,
+                    ["isImage"] = r.Payload.TryGetValue("isImage", out var isImg1) ? isImg1.StringValue : "false",
+                    ["imageId"] = r.Payload.TryGetValue("imageId", out var imgId1) ? imgId1.StringValue : ""
                 }
             }).ToList();
         }
@@ -279,9 +285,12 @@ public class QdrantVectorStore : IVectorStore
                 Content = r.Payload["content"].StringValue,
                 Score = r.Score,
                 ChunkIndex = (int)r.Payload["chunkIndex"].IntegerValue,
+                // Argha - 2026-03-18 - #55 - Read image metadata back from payload; guard against old points lacking the keys
                 Metadata = new Dictionary<string, string>
                 {
-                    ["contentType"] = r.Payload["contentType"].StringValue
+                    ["contentType"] = r.Payload["contentType"].StringValue,
+                    ["isImage"] = r.Payload.TryGetValue("isImage", out var isImg2) ? isImg2.StringValue : "false",
+                    ["imageId"] = r.Payload.TryGetValue("imageId", out var imgId2) ? imgId2.StringValue : ""
                 },
                 // Argha - 2026-02-20 - Convert protobuf RepeatedField<float> to float[] for MMR
                 Embedding = r.Vectors?.Vector?.Data.ToArray()
@@ -365,9 +374,12 @@ public class QdrantVectorStore : IVectorStore
                 // Argha - 2026-02-20 - Score=1.0 placeholder; actual ranking done via RRF in RagService
                 Score = 1.0,
                 ChunkIndex = (int)r.Payload["chunkIndex"].IntegerValue,
+                // Argha - 2026-03-18 - #55 - Read image metadata back from payload; guard against old points lacking the keys
                 Metadata = new Dictionary<string, string>
                 {
-                    ["contentType"] = r.Payload["contentType"].StringValue
+                    ["contentType"] = r.Payload["contentType"].StringValue,
+                    ["isImage"] = r.Payload.TryGetValue("isImage", out var isImg3) ? isImg3.StringValue : "false",
+                    ["imageId"] = r.Payload.TryGetValue("imageId", out var imgId3) ? imgId3.StringValue : ""
                 }
             }).ToList();
         }
