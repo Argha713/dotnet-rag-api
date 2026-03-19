@@ -80,3 +80,6 @@ test-sample.txt
 *.db
 *.db-shm
 *.db-wal
+
+# Reference images (local only)
+*.webp

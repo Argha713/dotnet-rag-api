@@ -1,51 +1,54 @@
 /* Argha - 2026-03-03 - #11 - Design system: CSS custom properties + base resets */
+/* Argha - 2026-03-20 - #59 - Dark Orbital Theme: full token overhaul */
 
 /* ─── Color tokens ─────────────────────────────────────────────────── */
 :root {
   /* Canvas & surfaces */
-  --bg-base:        #f8fafc;
-  --bg-surface:     #ffffff;
-  --bg-subtle:      #f1f5f9;
-  --bg-muted:       #e2e8f0;
+  --bg-base:        #060608;
+  --bg-surface:     rgba(255, 255, 255, 0.034);
+  --bg-subtle:      rgba(255, 255, 255, 0.055);
+  --bg-muted:       rgba(255, 255, 255, 0.08);
+  --bg-card:        rgba(255, 255, 255, 0.034);
 
-  /* Primary (indigo) */
-  --primary:        #6366f1;
-  --primary-hover:  #4f46e5;
-  --primary-active: #4338ca;
-  --primary-light:  #eef2ff;
-  --primary-mid:    #c7d2fe;
+  /* Primary (teal) */
+  --primary:        #00d9c0;
+  --primary-hover:  #00f5d8;
+  --primary-active: #00b8a4;
+  --primary-light:  rgba(0, 217, 192, 0.10);
+  --primary-mid:    rgba(0, 217, 192, 0.30);
+  --primary-glow:   rgba(0, 217, 192, 0.14);
 
-  /* Semantic */
-  --success:        #10b981;
-  --success-light:  #d1fae5;
-  --success-text:   #065f46;
+  /* Semantic — dark-theme muted versions */
+  --success:        #22d3a0;
+  --success-light:  rgba(34, 211, 160, 0.12);
+  --success-text:   #22d3a0;
   --warning:        #f59e0b;
-  --warning-light:  #fef3c7;
-  --warning-text:   #92400e;
-  --danger:         #ef4444;
-  --danger-light:   #fee2e2;
-  --danger-text:    #991b1b;
-  --info:           #06b6d4;
-  --info-light:     #cffafe;
-  --info-text:      #164e63;
+  --warning-light:  rgba(245, 158, 11, 0.12);
+  --warning-text:   #fbbf24;
+  --danger:         #f87171;
+  --danger-light:   rgba(248, 113, 113, 0.12);
+  --danger-text:    #f87171;
+  --info:           #38bdf8;
+  --info-light:     rgba(56, 189, 248, 0.12);
+  --info-text:      #38bdf8;
 
   /* Text */
-  --text-primary:   #0f172a;
-  --text-secondary: #475569;
-  --text-muted:     #94a3b8;
-  --text-inverse:   #ffffff;
+  --text-primary:   #efefef;
+  --text-secondary: #a0a0b4;
+  --text-muted:     #8a8a9a;
+  --text-inverse:   #060608;
 
   /* Borders */
-  --border:         #e2e8f0;
-  --border-focus:   #6366f1;
-  --border-subtle:  #f1f5f9;
+  --border:         rgba(255, 255, 255, 0.07);
+  --border-focus:   #00d9c0;
+  --border-subtle:  rgba(255, 255, 255, 0.04);
 
   /* Shadows */
-  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md:  0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
-  --shadow-lg:  0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
-  --shadow-xl:  0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.03);
+  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md:  0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg:  0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  --shadow-xl:  0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
 
   /* Border radii */
   --radius-xs:  4px;
@@ -67,8 +70,9 @@
   --space-12: 48px;
 
   /* Typography */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-display: 'Syne', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans:    'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono:    'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
 
   --text-xs:   0.75rem;   /* 12px */
   --text-sm:   0.8125rem; /* 13px */
@@ -89,8 +93,10 @@
   --transition-base: 150ms ease;
   --transition-slow: 250ms ease;
 
-  /* Navbar */
-  --navbar-height: 60px;
+  /* Sidebar */
+  --sidebar-width: 60px;
+  /* Argha - 2026-03-20 - #59 - Commented: old navbar height token; replaced by sidebar-width */
+  /* --navbar-height: 60px; */
 }
 
 /* ─── Base reset ───────────────────────────────────────────────────── */
@@ -108,6 +114,11 @@ body {
   font-size: var(--text-base);
   color: var(--text-primary);
   background-color: var(--bg-base);
+  /* Argha - 2026-03-20 - #59 - Subtle 40px grid overlay on dark background */
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: 40px 40px;
   line-height: 1.6;
   margin: 0;
   padding: 0;
@@ -131,15 +142,15 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: rgba(255, 255, 255, 0.10);
   border-radius: var(--radius-full);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: rgba(255, 255, 255, 0.18);
 }
 
 /* ─── Selection ────────────────────────────────────────────────────── */
 ::selection {
   background: var(--primary-mid);
-  color: var(--primary-active);
+  color: var(--bg-base);
 }

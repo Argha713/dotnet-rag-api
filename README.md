@@ -59,7 +59,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 
 ### Workspace UI ✅
 - **Workspaces page** — Create, switch, delete, and import workspaces from `/workspaces`
-- **Navbar chip** — Active workspace shown as indigo pill in the top navigation bar; amber "Get Started →" badge shown to new users
+- **Sidebar status dot** — Active workspace shown as teal dot in the vertical sidebar footer; amber dot shown to new users with no workspace
 - **Onboarding guide** — 4-step setup instructions shown in the Workspaces empty state; step 2 highlighted in amber to warn about one-time API key
 - **Workspace gate** — Documents and Chat pages blocked behind a lock screen until at least one workspace is created
 - **No-documents banner** — Chat panel shows an info banner and disables the textarea when the active workspace has no documents uploaded
@@ -86,8 +86,8 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 - **Docker Compose** — One command to spin up all local dependencies (API + UI + Qdrant + Ollama + PostgreSQL)
 - **GitHub Actions CI/CD** — Automated test, build, and deploy pipeline
 - **Azure deployment** — Container Apps (scales to zero) + Static Web Apps (free tier)
-- **Modern SaaS UI ✅** — Inter design system, indigo theme, drag-drop uploads, glassmorphism health dashboard, footer
-- **330 unit tests** — xUnit + Moq + FluentAssertions across all layers
+- **Dark Orbital UI ✅** — Syne + DM Sans fonts, `#060608` background, teal/cyan glowing 3D orb with mouse-tracking parallax, vertical icon sidebar, quick-action hero cards
+- **335 unit tests** — xUnit + Moq + FluentAssertions across all layers
 
 ---
 

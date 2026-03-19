@@ -6,10 +6,12 @@
     <title>RAG Chat</title>
     <base href="/" />
     <link rel="icon" href="data:," />
-    <!-- Argha - 2026-03-03 - #11 - Inter font for modern SaaS typography -->
+    <!-- Argha - 2026-03-20 - #59 - Dark Orbital Theme: Syne (display) + DM Sans (body) -->
+    <!-- Argha - 2026-03-03 - #11 - Commented: old Inter font import -->
+    <!-- <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" /> -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
     <!-- Argha - 2026-03-03 - #11 - Design system tokens + component styles -->
     <link href="css/design-system.css" rel="stylesheet" />
@@ -18,9 +20,10 @@
 </head>
 <body>
     <div id="app">
-        <div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#f8fafc;flex-direction:column;gap:12px;">
-            <div style="width:40px;height:40px;border:3px solid #c7d2fe;border-top-color:#6366f1;border-radius:50%;animation:spin 0.7s linear infinite;"></div>
-            <p style="font-family:Inter,sans-serif;font-size:0.875rem;color:#94a3b8;margin:0;">Loading RAG Chat…</p>
+        <!-- Argha - 2026-03-20 - #59 - Loading spinner updated to dark orbital theme colors -->
+        <div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#060608;flex-direction:column;gap:12px;">
+            <div style="width:40px;height:40px;border:3px solid rgba(0,217,192,0.18);border-top-color:#00d9c0;border-radius:50%;animation:spin 0.7s linear infinite;"></div>
+            <p style="font-family:'DM Sans',sans-serif;font-size:0.875rem;color:#8a8a9a;margin:0;">Loading RAG Chat…</p>
             <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
         </div>
     </div>
@@ -33,5 +36,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="_framework/blazor.webassembly.js"></script>
+    <!-- Argha - 2026-03-20 - #59 - Parallax: drives --orb-x / --orb-y CSS vars from mousemove -->
+    <script src="js/parallax.js"></script>
 </body>
 </html>
