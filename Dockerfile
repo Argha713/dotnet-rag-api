@@ -27,7 +27,12 @@ WORKDIR /app
 RUN adduser --disabled-password --gecos '' appuser
 
 # Argha - 2026-03-01 - install curl; required by HEALTHCHECK (not in aspnet base image)
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+# Argha - 2026-03-20 - #51 - install Tesseract + English tessdata for scanned PDF OCR fallback
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    libtesseract-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Argha - 2026-03-01 - grant appuser write access to /app so SQLite can create ragapi.db at runtime

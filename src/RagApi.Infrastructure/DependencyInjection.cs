@@ -89,6 +89,14 @@ public static class DependencyInjection
             services.AddSingleton<IVectorStore, QdrantVectorStore>();
         }
 
+        // Argha - 2026-03-20 - #51 - Register OCR service; NullOcrService when disabled so DocumentProcessor always has a dependency
+        services.Configure<OcrOptions>(configuration.GetSection("Ocr"));
+        var ocrOptions = configuration.GetSection("Ocr").Get<OcrOptions>() ?? new OcrOptions();
+        if (ocrOptions.Enabled)
+            services.AddSingleton<IOcrService, TesseractOcrService>();
+        else
+            services.AddSingleton<IOcrService, NullOcrService>();
+
         // Register document processor
         services.AddSingleton<IDocumentProcessor, DocumentProcessor>();
 

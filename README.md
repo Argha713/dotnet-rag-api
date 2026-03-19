@@ -8,7 +8,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 [![Deploy](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml/badge.svg)](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat&logo=dotnet)
 ![C#](https://img.shields.io/badge/C%23-12-239120?style=flat&logo=csharp)
-![Tests](https://img.shields.io/badge/tests-330%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-335%20passing-brightgreen)
 ![Phase](https://img.shields.io/badge/phase-14%20complete%20✅-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
@@ -28,6 +28,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 
 ### Document Processing
 - **Multi-format ingestion** — PDF, DOCX, TXT, Markdown
+- **Scanned PDF OCR** — Tesseract.NET fallback extracts text from image-only (scanned) PDFs when no text layer is present
 - **Configurable chunking** — Fixed, Sentence, or Paragraph strategy per upload
 - **Batch upload** — Process 1–20 documents in a single request
 - **Document update & re-index** — Replace content in-place via `PUT /api/documents/{id}`; preserves ID and updates vector index

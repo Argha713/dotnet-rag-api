@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using RagApi.Application.Interfaces;
 using RagApi.Application.Models;
+using RagApi.Infrastructure.AI;
 using RagApi.Infrastructure.DocumentProcessing;
 using UglyToad.PdfPig.Writer;
 
@@ -19,7 +20,8 @@ public class DocumentProcessorTests
     public DocumentProcessorTests()
     {
         var loggerMock = new Mock<ILogger<DocumentProcessor>>();
-        _sut = new DocumentProcessor(loggerMock.Object);
+        // Argha - 2026-03-20 - #51 - NullOcrService (OCR disabled) for non-OCR tests
+        _sut = new DocumentProcessor(loggerMock.Object, Mock.Of<IOcrService>());
     }
 
     [Theory]
@@ -351,5 +353,101 @@ public class DocumentProcessorTests
     {
         var options = new VisionOptions();
         options.MaxImagesPerDocument.Should().Be(20);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Argha - 2026-03-20 - #51 - OCR fallback tests
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void NullOcrService_IsEnabled_ReturnsFalse()
+    {
+        var svc = new NullOcrService();
+        svc.IsEnabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task NullOcrService_RecognizeTextAsync_ReturnsEmpty()
+    {
+        var svc = new NullOcrService();
+        var result = await svc.RecognizeTextAsync(new byte[] { 1, 2, 3 });
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExtractTextAsync_PdfWithTextLayer_OcrNotCalled()
+    {
+        // Arrange: build a text PDF; OCR service should never be called
+        var ocrMock = new Mock<IOcrService>();
+        ocrMock.Setup(s => s.IsEnabled).Returns(true);
+
+        var logger = new Mock<ILogger<DocumentProcessor>>();
+        var sut = new DocumentProcessor(logger.Object, ocrMock.Object);
+
+        var builder = new PdfDocumentBuilder();
+        var page = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        // PdfPig requires a font to add text; use the standard Helvetica built-in
+        var font = builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica);
+        page.AddText("Hello world", 12, new UglyToad.PdfPig.Core.PdfPoint(50, 700), font);
+        var pdfBytes = builder.Build();
+
+        using var stream = new MemoryStream(pdfBytes);
+
+        // Act
+        var result = await sut.ExtractTextAsync(stream, "application/pdf");
+
+        // Assert: OCR was never invoked
+        ocrMock.Verify(s => s.RecognizeTextAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()), Times.Never);
+        result.Should().Contain("Hello world");
+    }
+
+    [Fact]
+    public async Task ExtractTextAsync_EmptyPdf_OcrDisabled_ReturnsEmpty()
+    {
+        // Arrange: text-layer-empty PDF with OCR disabled (NullOcrService)
+        var ocrMock = new Mock<IOcrService>();
+        ocrMock.Setup(s => s.IsEnabled).Returns(false);
+
+        var logger = new Mock<ILogger<DocumentProcessor>>();
+        var sut = new DocumentProcessor(logger.Object, ocrMock.Object);
+
+        var builder = new PdfDocumentBuilder();
+        builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4); // no text, no images
+        var pdfBytes = builder.Build();
+
+        using var stream = new MemoryStream(pdfBytes);
+
+        // Act — should not throw even though text is empty
+        var result = await sut.ExtractTextAsync(stream, "application/pdf");
+
+        // Assert: OCR not attempted
+        ocrMock.Verify(s => s.RecognizeTextAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()), Times.Never);
+        result.Trim().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExtractTextAsync_EmptyPdf_OcrEnabled_NoImages_ReturnsEmpty()
+    {
+        // Arrange: empty PDF (no text, no images), OCR enabled but nothing to OCR
+        var ocrMock = new Mock<IOcrService>();
+        ocrMock.Setup(s => s.IsEnabled).Returns(true);
+        ocrMock.Setup(s => s.RecognizeTextAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
+               .ReturnsAsync("should not be called");
+
+        var logger = new Mock<ILogger<DocumentProcessor>>();
+        var sut = new DocumentProcessor(logger.Object, ocrMock.Object);
+
+        var builder = new PdfDocumentBuilder();
+        builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        var pdfBytes = builder.Build();
+
+        using var stream = new MemoryStream(pdfBytes);
+
+        // Act
+        var result = await sut.ExtractTextAsync(stream, "application/pdf");
+
+        // Assert: OCR called 0 times (no embedded images on the page)
+        ocrMock.Verify(s => s.RecognizeTextAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()), Times.Never);
+        result.Trim().Should().BeEmpty();
     }
 }
