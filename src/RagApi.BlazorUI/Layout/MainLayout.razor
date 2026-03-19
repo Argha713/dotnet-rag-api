@@ -1,16 +1,15 @@
 @* Argha - 2026-03-03 - #12 - Root layout: white navbar + body + footer *@
 @* Argha - 2026-02-21 - Commented: old layout (no footer, old page-body class) *@
 @* <div class="page-body">@Body</div> *@
+@* Argha - 2026-03-20 - #59 - Dark Orbital Theme: replaced top-navbar with sidebar shell *@
+@* Argha - 2026-03-20 - #59 - Commented: old page-wrapper + footer layout *@
+@* <div class="page-wrapper"><NavMenu /><div class="page-body">@Body</div><footer class="app-footer">&copy; 2026 Argha Sarkar &mdash; Built with &#x2615; and .NET</footer></div> *@
 @inherits LayoutComponentBase
 
-<div class="page-wrapper">
+<div class="app-shell">
     <NavMenu />
 
-    <div class="page-body">
+    <div class="app-content">
         @Body
     </div>
-
-    <footer class="app-footer">
-        &copy; 2026 Argha Sarkar &mdash; Built with &#x2615; and .NET
-    </footer>
 </div>
