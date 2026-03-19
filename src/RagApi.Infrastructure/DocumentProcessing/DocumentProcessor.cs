@@ -8,6 +8,8 @@ using RagApi.Domain.Entities;
 using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.RegularExpressions;
+// Argha - 2026-03-20 - #51 - IOcrService used for OCR fallback on scanned PDFs
+using Page = UglyToad.PdfPig.Content.Page;
 
 namespace RagApi.Infrastructure.DocumentProcessing;
 
@@ -17,6 +19,8 @@ namespace RagApi.Infrastructure.DocumentProcessing;
 public class DocumentProcessor : IDocumentProcessor
 {
     private readonly ILogger<DocumentProcessor> _logger;
+    // Argha - 2026-03-20 - #51 - OCR service injected for scanned PDF fallback; NullOcrService when disabled
+    private readonly IOcrService _ocrService;
 
     private static readonly IReadOnlyList<string> _supportedTypes = new[]
     {
@@ -26,9 +30,10 @@ public class DocumentProcessor : IDocumentProcessor
         "text/markdown"
     };
 
-    public DocumentProcessor(ILogger<DocumentProcessor> logger)
+    public DocumentProcessor(ILogger<DocumentProcessor> logger, IOcrService ocrService)
     {
         _logger = logger;
+        _ocrService = ocrService;
     }
 
     public IReadOnlyList<string> SupportedContentTypes => _supportedTypes;
@@ -40,9 +45,10 @@ public class DocumentProcessor : IDocumentProcessor
 
     public async Task<string> ExtractTextAsync(Stream fileStream, string contentType, CancellationToken cancellationToken = default)
     {
+        // Argha - 2026-03-20 - #51 - PDF branch is now async to support OCR fallback
         return contentType.ToLowerInvariant() switch
         {
-            "application/pdf" => ExtractFromPdf(fileStream),
+            "application/pdf" => await ExtractFromPdfAsync(fileStream, cancellationToken),
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => ExtractFromDocx(fileStream),
             "text/plain" or "text/markdown" => await ExtractFromTextAsync(fileStream, cancellationToken),
             _ => throw new NotSupportedException($"Content type '{contentType}' is not supported")
@@ -253,19 +259,76 @@ public class DocumentProcessor : IDocumentProcessor
         return text.Trim();
     }
 
-    private string ExtractFromPdf(Stream fileStream)
+    // Argha - 2026-03-20 - #51 - Async; falls back to OCR when PdfPig yields no text (scanned PDFs)
+    private async Task<string> ExtractFromPdfAsync(Stream fileStream, CancellationToken cancellationToken)
     {
-        var textBuilder = new StringBuilder();
-
         using var document = PdfDocument.Open(fileStream);
-        foreach (var page in document.GetPages())
+        var pages = document.GetPages().ToList();
+
+        var textBuilder = new StringBuilder();
+        foreach (var page in pages)
         {
-            var pageText = page.Text;
-            textBuilder.AppendLine(pageText);
+            textBuilder.AppendLine(page.Text);
             textBuilder.AppendLine(); // Add paragraph break between pages
         }
 
-        return textBuilder.ToString();
+        var text = textBuilder.ToString();
+
+        // Argha - 2026-03-20 - #51 - If PdfPig found no text and OCR is enabled, extract page images and OCR them
+        if (!string.IsNullOrWhiteSpace(text) || !_ocrService.IsEnabled)
+            return text;
+
+        _logger.LogInformation("PDF text layer empty; running OCR fallback via Tesseract");
+        return await OcrPdfPagesAsync(pages, cancellationToken);
+    }
+
+    // Argha - 2026-03-20 - #51 - Extracts embedded images from each page and runs OCR; concatenates results
+    private async Task<string> OcrPdfPagesAsync(List<Page> pages, CancellationToken cancellationToken)
+    {
+        var ocrBuilder = new StringBuilder();
+
+        for (var i = 0; i < pages.Count; i++)
+        {
+            var page = pages[i];
+            var pageNumber = i + 1;
+            var pageHadText = false;
+
+            foreach (var image in page.GetImages())
+            {
+                // Argha - 2026-03-20 - #51 - No dimension filter here; the full page image is what we want
+                var filterName = GetImageFilterName(image);
+
+                // Argha - 2026-03-20 - #51 - JBIG2 has no free decoder; skip (see also ExtractImagesAsync)
+                if (filterName is "JBIG2Decode")
+                    continue;
+
+                byte[] bytes;
+                if (filterName == "DCTDecode")
+                {
+                    bytes = image.RawBytes.ToArray();
+                }
+                else
+                {
+                    if (!image.TryGetPng(out var png) || png is null)
+                        continue;
+                    bytes = png;
+                }
+
+                var pageText = await _ocrService.RecognizeTextAsync(bytes, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(pageText))
+                {
+                    ocrBuilder.AppendLine(pageText);
+                    pageHadText = true;
+                }
+            }
+
+            if (pageHadText)
+                ocrBuilder.AppendLine(); // paragraph break between pages
+            else
+                _logger.LogDebug("OCR found no text on page {PageNumber}", pageNumber);
+        }
+
+        return ocrBuilder.ToString();
     }
 
     private string ExtractFromDocx(Stream fileStream)

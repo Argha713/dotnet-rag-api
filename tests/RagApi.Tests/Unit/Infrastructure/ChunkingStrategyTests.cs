@@ -19,7 +19,8 @@ public class ChunkingStrategyTests
 
     public ChunkingStrategyTests()
     {
-        _processor = new DocumentProcessor(Mock.Of<ILogger<DocumentProcessor>>());
+        // Argha - 2026-03-20 - #51 - OCR service required by updated ctor; disabled for chunking tests
+        _processor = new DocumentProcessor(Mock.Of<ILogger<DocumentProcessor>>(), Mock.Of<IOcrService>());
     }
 
     // --- Fixed (regression) ---
