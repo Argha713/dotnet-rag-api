@@ -135,11 +135,12 @@ html, body {
 /* .app-footer { ... } */
 
 /* ─── Chat layout ─────────────────────────────────────────────────── */
+/* Argha - 2026-03-20 - #61 - overflow: visible so orb can extend above the layout boundary */
 .chat-layout {
     display: flex;
     flex: 1;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 
 /* Conversation sidebar */
@@ -213,15 +214,19 @@ html, body {
 }
 
 /* Chat panel */
+/* Argha - 2026-03-20 - #61 - Changed overflow: hidden → visible so the orb (top: -140px) is not clipped */
 .chat-panel {
     flex: 1;
+    min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible;
 }
 
 /* ─── Chat hero (empty state — orb + greeting + cards + input) ─────── */
 /* Argha - 2026-03-20 - #59 - Hero section shown when no conversation is active */
+/* Argha - 2026-03-20 - #61 - overflow: visible so the orb (position: absolute; top: -140px) is not clipped */
 .chat-hero {
     flex: 1;
     display: flex;
@@ -230,7 +235,7 @@ html, body {
     justify-content: center;
     padding: var(--space-8);
     position: relative;
-    overflow: hidden;
+    overflow: visible;
     gap: var(--space-6);
 }
 

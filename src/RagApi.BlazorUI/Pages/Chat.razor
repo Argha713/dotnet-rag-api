@@ -43,7 +43,8 @@ else
     @* ── Left sidebar: conversation list ── *@
     <div class="chat-sidebar">
 
-        <button class="btn-primary-modern w-100" @onclick="CreateNewConversationAsync" disabled="@_isStreaming">
+        @* Argha - 2026-03-20 - #61 - Reset to hero state; conversation is lazily created on first message send *@
+        <button class="btn-primary-modern w-100" @onclick="ResetToHeroAsync" disabled="@_isStreaming">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
@@ -511,6 +512,17 @@ else
     {
         _inputText = prompt;
         StateHasChanged();
+    }
+
+    // Argha - 2026-03-20 - #61 - Reset to hero (empty) state; conversation created lazily on first send
+    private Task ResetToHeroAsync()
+    {
+        _activeConvId = Guid.Empty;
+        _messages = new();
+        _inputText = string.Empty;
+        _errorMessage = string.Empty;
+        StateHasChanged();
+        return Task.CompletedTask;
     }
 
     // Argha - 2026-03-15 - #24 - Commented out: server is now source of truth; localStorage no longer persisted
