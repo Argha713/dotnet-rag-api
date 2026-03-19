@@ -9,7 +9,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat&logo=dotnet)
 ![C#](https://img.shields.io/badge/C%23-12-239120?style=flat&logo=csharp)
 ![Tests](https://img.shields.io/badge/tests-330%20passing-brightgreen)
-![Phase](https://img.shields.io/badge/phase-14.8%20image%20sources%20UI-brightgreen)
+![Phase](https://img.shields.io/badge/phase-14%20complete%20✅-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ---
@@ -86,7 +86,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 - **GitHub Actions CI/CD** — Automated test, build, and deploy pipeline
 - **Azure deployment** — Container Apps (scales to zero) + Static Web Apps (free tier)
 - **Modern SaaS UI ✅** — Inter design system, indigo theme, drag-drop uploads, glassmorphism health dashboard, footer
-- **328 unit tests** — xUnit + Moq + FluentAssertions across all layers
+- **330 unit tests** — xUnit + Moq + FluentAssertions across all layers
 
 ---
 
