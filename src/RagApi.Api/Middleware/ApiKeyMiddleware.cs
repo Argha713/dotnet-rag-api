@@ -33,18 +33,6 @@ public class ApiKeyMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        // Argha - 2026-02-20 - Bypass when no key is configured (development mode)
-        if (string.IsNullOrEmpty(_configuredKey))
-        {
-            // Argha - 2026-03-04 - #17 - Still resolve default workspace so controllers have a context
-            var workspaceContext = context.RequestServices.GetRequiredService<IWorkspaceContext>();
-            var workspaceRepo = context.RequestServices.GetRequiredService<IWorkspaceRepository>();
-            var defaultWs = await workspaceRepo.GetByIdAsync(Workspace.DefaultWorkspaceId);
-            workspaceContext.Current = defaultWs ?? CreateFallbackWorkspace();
-            await _next(context);
-            return;
-        }
-
         // Argha - 2026-02-20 - Health check is always public
         if (context.Request.Path.StartsWithSegments(HealthPath, StringComparison.OrdinalIgnoreCase))
         {
@@ -60,38 +48,63 @@ public class ApiKeyMiddleware
             return;
         }
 
-        if (!context.Request.Headers.TryGetValue(ApiKeyHeader, out var providedKey)
-            || string.IsNullOrEmpty(providedKey))
-        {
-            await WriteUnauthorized(context);
-            return;
-        }
-
-        // Argha - 2026-03-04 - #17 - Resolve workspace from Scoped services (middleware is singleton)
+        // Argha - 2026-03-22 - #63 - Resolve Scoped services once for the remainder of this method
         var ctx = context.RequestServices.GetRequiredService<IWorkspaceContext>();
         var repo = context.RequestServices.GetRequiredService<IWorkspaceRepository>();
 
-        // Argha - 2026-03-04 - #17 - Check DB first: SHA-256(providedKey) → Workspace row
-        var hashedKey = WorkspaceService.ComputeSha256(providedKey!);
-        var workspace = await repo.GetByApiKeyHashAsync(hashedKey);
+        var hasKey = context.Request.Headers.TryGetValue(ApiKeyHeader, out var providedKey)
+                     && !string.IsNullOrEmpty(providedKey);
 
-        if (workspace != null)
+        if (hasKey)
         {
-            ctx.Current = workspace;
+            // Argha - 2026-03-22 - #63 - Always check workspace-specific key first, regardless of whether
+            // the global ApiAuth:ApiKey is configured. Previous code skipped this entire block when
+            // ApiAuth:ApiKey was empty, causing all workspaces to resolve to the default workspace.
+            var hashedKey = WorkspaceService.ComputeSha256(providedKey!);
+            var workspace = await repo.GetByApiKeyHashAsync(hashedKey);
+
+            if (workspace != null)
+            {
+                ctx.Current = workspace;
+                await _next(context);
+                return;
+            }
+
+            // Argha - 2026-03-04 - #17 - Fall back to global config key → default workspace
+            if (!string.IsNullOrEmpty(_configuredKey) && providedKey == _configuredKey)
+            {
+                ctx.Current = await repo.GetByIdAsync(Workspace.DefaultWorkspaceId)
+                              ?? CreateFallbackWorkspace();
+                await _next(context);
+                return;
+            }
+
+            // Argha - 2026-03-22 - #63 - Unrecognised key in production → 401
+            if (!string.IsNullOrEmpty(_configuredKey))
+            {
+                await WriteUnauthorized(context);
+                return;
+            }
+
+            // Argha - 2026-03-22 - #63 - Dev mode (no global key set) + unrecognised key: still use
+            // default workspace so Swagger/tooling calls without a valid key are not blocked
+            ctx.Current = await repo.GetByIdAsync(Workspace.DefaultWorkspaceId)
+                          ?? CreateFallbackWorkspace();
             await _next(context);
             return;
         }
 
-        // Argha - 2026-03-04 - #17 - Fall back to global config key → default workspace
-        if (providedKey == _configuredKey)
+        // Argha - 2026-03-22 - #63 - No key in header at all
+        if (string.IsNullOrEmpty(_configuredKey))
         {
-            var defaultWorkspace = await repo.GetByIdAsync(Workspace.DefaultWorkspaceId)
-                ?? CreateFallbackWorkspace();
-            ctx.Current = defaultWorkspace;
+            // Argha - 2026-02-20 - Dev mode bypass: no global key configured, use default workspace
+            ctx.Current = await repo.GetByIdAsync(Workspace.DefaultWorkspaceId)
+                          ?? CreateFallbackWorkspace();
             await _next(context);
             return;
         }
 
+        // Production: key is required but missing
         await WriteUnauthorized(context);
     }
 
