@@ -149,6 +149,55 @@ namespace RagApi.Infrastructure.Data.Migrations
                     b.ToTable("DocumentImages");
                 });
 
+            modelBuilder.Entity("RagApi.Domain.Entities.QueryLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("EstimatedCostUsd")
+                        .HasPrecision(18, 8)
+                        .HasColumnType("numeric(18,8)");
+
+                    b.Property<bool>("IsSuccess")
+                        .HasColumnType("boolean");
+
+                    b.Property<long>("LatencyMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("LoggedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("QueryText")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("QueryType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("SourceCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TokensUsed")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkspaceId", "LoggedAt");
+
+                    b.ToTable("QueryLogs");
+                });
+
             modelBuilder.Entity("RagApi.Domain.Entities.Workspace", b =>
                 {
                     b.Property<Guid>("Id")
@@ -220,6 +269,17 @@ namespace RagApi.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Document");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("RagApi.Domain.Entities.QueryLog", b =>
+                {
+                    b.HasOne("RagApi.Domain.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Workspace");
                 });

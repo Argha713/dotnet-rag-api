@@ -131,6 +131,12 @@ public static class DependencyInjection
         services.AddScoped<ConversationExportService>();
         // Argha - 2026-03-04 - #17 - Workspace service for workspace lifecycle management
         services.AddScoped<WorkspaceService>();
+        // Argha - 2026-03-22 - #85 - Analytics & Observability: cost estimation + query audit log
+        services.Configure<AnalyticsConfiguration>(configuration.GetSection(AnalyticsConfiguration.SectionName));
+        services.AddScoped<ICostEstimationService, CostEstimationService>();
+        services.AddScoped<IQueryLogRepository, QueryLogRepository>();
+        services.AddScoped<IQueryLogService, QueryLogService>();
+
         // Argha - 2026-03-22 - #65 - Agentic RAG: tools + orchestration service
         services.Configure<RagApi.Application.Models.AgentConfiguration>(
             configuration.GetSection(RagApi.Application.Models.AgentConfiguration.SectionName));
