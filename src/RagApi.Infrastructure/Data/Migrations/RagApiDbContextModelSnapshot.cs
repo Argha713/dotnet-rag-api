@@ -63,6 +63,10 @@ namespace RagApi.Infrastructure.Data.Migrations
                     b.Property<int>("ChunkCount")
                         .HasColumnType("integer");
 
+                    b.Property<string>("ContentHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -85,6 +89,18 @@ namespace RagApi.Infrastructure.Data.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("SuggestedTagsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]");
+
+                    b.Property<DateTime?>("SummaryGeneratedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("SummaryText")
+                        .HasColumnType("text");
+
                     b.Property<string>("TagsJson")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -97,12 +113,20 @@ namespace RagApi.Infrastructure.Data.Migrations
                     b.Property<DateTime>("UploadedAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<int>("Version")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<Guid>("WorkspaceId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
                     b.HasIndex("UploadedAt");
+
+                    b.HasIndex("WorkspaceId", "ContentHash")
+                        .HasDatabaseName("IX_Documents_WorkspaceId_ContentHash");
 
                     b.HasIndex("WorkspaceId", "UploadedAt");
 

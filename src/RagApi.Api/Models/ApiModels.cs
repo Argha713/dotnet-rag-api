@@ -160,8 +160,14 @@ public class DocumentDto
     // Argha - 2026-02-19 - Tags deserialized from TagsJson for API response
     public List<string> Tags { get; set; } = new();
 
-    // Argha - 2026-02-21 - Null for documents never re-processed; set on first update 
+    // Argha - 2026-02-21 - Null for documents never re-processed; set on first update
     public DateTime? UpdatedAt { get; set; }
+
+    // Argha - 2026-03-22 - #78 - Document version; incremented on each update
+    public int Version { get; set; } = 1;
+
+    // Argha - 2026-03-22 - #78 - True when UploadDocumentAsync returned an existing duplicate document
+    public bool IsDuplicate { get; set; }
 }
 
 /// <summary>

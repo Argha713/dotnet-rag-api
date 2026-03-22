@@ -8,8 +8,8 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 [![Deploy](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml/badge.svg)](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat&logo=dotnet)
 ![C#](https://img.shields.io/badge/C%23-12-239120?style=flat&logo=csharp)
-![Tests](https://img.shields.io/badge/tests-366%20passing-brightgreen)
-![Phase](https://img.shields.io/badge/phase-15%20complete%20✅-brightgreen)
+![Tests](https://img.shields.io/badge/tests-409%20passing-brightgreen)
+![Phase](https://img.shields.io/badge/phase-16%20complete%20✅-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ---
@@ -69,6 +69,20 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 - **Import flow** — Paste an existing API key to link a workspace to this browser session (validates via `GET /api/documents`, resolves ID via `GET /api/workspaces/current`)
 - **Dynamic key injection** — `WorkspaceKeyHandler` DelegatingHandler replaces the static `X-Api-Key` header on every outgoing request
 
+### Expanded Document Intelligence ✅
+- **URL ingestion** — `POST /api/documents/ingest-url`: fetch any HTML page or YouTube video (captions → Whisper audio fallback), strip non-content, chunk, and embed
+- **XLSX / CSV support** — each row becomes a chunk as `Header1: Value | Header2: Value`; preserves spreadsheet context for retrieval
+- **PPTX support** — each slide extracted as `[Slide N: title]\nbody text`; structure visible in search results
+- **Audio transcription** — upload MP3 / WAV / MP4 audio directly; OpenAI Whisper transcribes to text; Ollama provider returns 415
+- **ZIP batch ingestion** — `POST /api/documents/ingest-zip`: enumerate archive entries, skip unsupported types, upload all supported files as a batch
+- **PDF table extraction** — PdfPig word clustering detects grid-like rows; renders them as Markdown tables inline with page text
+- **DOCX heading annotation** — heading-style paragraphs prefixed with `[Section: ...]`; enables hierarchical search and chunking
+- **Hierarchical chunking strategy** — splits at `[Section:` markers; each chunk carries its section heading as context prefix
+- **Deduplication** — SHA-256 hash on upload; re-uploading the same file returns the existing document with `isDuplicate: true` (no duplicate vector entries)
+- **Document versioning** — `Version` field increments on every `PUT`; visible in all document responses
+- **Lazy summarization** — `GET /api/documents/{id}/summary`: generates via LLM on first call, caches in DB; free on subsequent calls
+- **Lazy auto-tagging** — `GET /api/documents/{id}/tags/suggestions`: LLM suggests 3–5 tags; `PUT /api/documents/{id}/tags` to accept them
+
 ### Agentic RAG ✅
 - **ReAct loop** — Agent plans retrieval, executes tools, observes results, and iterates (configurable max iterations, default 5)
 - **4 built-in tools** — `search_documents` (vector search), `get_document_summary` (chunk + summarise), `compare_chunks` (LLM comparison), `answer_directly` (loop termination)
@@ -94,7 +108,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 - **GitHub Actions CI/CD** — Automated test, build, and deploy pipeline
 - **Azure deployment** — Container Apps (scales to zero) + Static Web Apps (free tier)
 - **Dark Orbital UI ✅** — Syne + DM Sans fonts, `#060608` background, teal/cyan glowing 3D orb with mouse-tracking parallax, vertical icon sidebar, quick-action hero cards
-- **366 unit tests** — xUnit + Moq + FluentAssertions across all layers
+- **409 unit tests** — xUnit + Moq + FluentAssertions across all layers
 
 ---
 
@@ -308,7 +322,7 @@ Cors__AllowedOrigins__0=https://your-frontend.azurestaticapps.net
 | **Frontend** | Blazor WebAssembly (.NET 8) — Inter design system, indigo theme |
 | **Hosting** | Azure Container Apps + Azure Static Web Apps |
 | **CI/CD** | GitHub Actions → GHCR → Azure |
-| **Testing** | xUnit, Moq, FluentAssertions (366 tests) |
+| **Testing** | xUnit, Moq, FluentAssertions (409 tests) |
 | **API Docs** | Swagger / OpenAPI |
 
 ---
@@ -324,7 +338,7 @@ dotnet-rag-api/
 │   ├── RagApi.Domain/           # Core entities
 │   └── RagApi.Infrastructure/   # Qdrant, OpenAI, Azure, EF Core
 ├── tests/
-│   └── RagApi.Tests/            # 366 unit tests
+│   └── RagApi.Tests/            # 409 unit tests
 ├── .github/workflows/           # CI, Deploy API, Deploy UI
 ├── docker-compose.yml           # Local Qdrant + Ollama + PostgreSQL
 ├── Dockerfile                   # Production container image
