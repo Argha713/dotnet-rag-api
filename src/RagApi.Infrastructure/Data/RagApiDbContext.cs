@@ -106,6 +106,26 @@ public class RagApiDbContext : DbContext
                 .HasForeignKey(d => d.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(d => new { d.WorkspaceId, d.UploadedAt });
+
+            // Argha - 2026-03-22 - #78 - ContentHash: max 64 chars (SHA-256 hex); nullable for legacy docs
+            entity.Property(d => d.ContentHash)
+                .HasMaxLength(64);
+
+            // Argha - 2026-03-22 - #78 - Version defaults to 1 on DB insert
+            entity.Property(d => d.Version)
+                .HasDefaultValue(1);
+
+            // Argha - 2026-03-22 - #80 - SuggestedTagsJson defaults to empty JSON array
+            entity.Property(d => d.SuggestedTagsJson)
+                .IsRequired()
+                .HasDefaultValue("[]");
+
+            // Argha - 2026-03-22 - #78 - Composite index for fast per-workspace deduplication lookups
+            entity.HasIndex(d => new { d.WorkspaceId, d.ContentHash })
+                .HasDatabaseName("IX_Documents_WorkspaceId_ContentHash");
+
+            // Argha - 2026-03-22 - #78 - IsDuplicate is a transient in-memory flag; never stored in the database
+            entity.Ignore(d => d.IsDuplicate);
         });
 
         // Argha - 2026-03-16 - #30 - DocumentImage model configuration

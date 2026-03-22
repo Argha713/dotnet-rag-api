@@ -50,7 +50,9 @@ public enum ChunkingStrategy
     /// <summary>Splits at sentence boundaries (.!?) and groups sentences until ChunkSize is reached.</summary>
     Sentence,
     /// <summary>Each blank-line-separated paragraph becomes exactly one chunk (no size limit imposed).</summary>
-    Paragraph
+    Paragraph,
+    /// <summary>Splits at [Section: ...] boundary markers; each group is prefixed with its section heading.</summary>
+    Hierarchical
 }
 
 public class ChunkingOptions

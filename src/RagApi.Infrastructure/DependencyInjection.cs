@@ -31,8 +31,11 @@ public static class DependencyInjection
         services.Configure<DocumentProcessingOptions>(configuration.GetSection(DocumentProcessingOptions.SectionName));
         // Argha - 2026-02-21 - Register VectorStoreConfiguration for provider switching 
         services.Configure<VectorStoreConfiguration>(configuration.GetSection(VectorStoreConfiguration.SectionName));
-        // Argha - 2026-02-21 - Register BatchUploadOptions for concurrent batch document upload 
+        // Argha - 2026-02-21 - Register BatchUploadOptions for concurrent batch document upload
         services.Configure<BatchUploadOptions>(configuration.GetSection(BatchUploadOptions.SectionName));
+        // Argha - 2026-03-22 - #74 - URL ingestion and audio transcription options
+        services.Configure<UrlIngestionOptions>(configuration.GetSection(UrlIngestionOptions.SectionName));
+        services.Configure<AudioTranscriptionOptions>(configuration.GetSection(AudioTranscriptionOptions.SectionName));
 
         var aiConfig = configuration.GetSection(AiConfiguration.SectionName).Get<AiConfiguration>() 
             ?? new AiConfiguration();
@@ -42,6 +45,7 @@ public static class DependencyInjection
         {
             services.AddHttpClient<IEmbeddingService, AzureOpenAiEmbeddingService>();
             services.AddHttpClient<IChatService, AzureOpenAiChatService>();
+            services.AddHttpClient<IAudioTranscriptionService, OpenAiWhisperService>();
         }
         // Argha - 2026-03-01 - OpenAI direct API provider (Phase 7): no extra compute cost
         else if (aiConfig.Provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
@@ -49,11 +53,14 @@ public static class DependencyInjection
             services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>();
             services.AddHttpClient<IChatService, OpenAiChatService>();
             // No Ollama health check needed; OpenAI is a managed external service
+            services.AddHttpClient<IAudioTranscriptionService, OpenAiWhisperService>();
         }
         else // Default to Ollama
         {
             services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>();
             services.AddHttpClient<IChatService, OllamaChatService>();
+            // Argha - 2026-03-22 - #81 - Ollama has no Whisper endpoint; null service returns 415 for audio uploads
+            services.AddSingleton<IAudioTranscriptionService, NullAudioTranscriptionService>();
         }
 
         // Argha - 2026-03-16 - #32 - Vision service: real impl only when enabled + provider is OpenAI
@@ -99,6 +106,11 @@ public static class DependencyInjection
 
         // Register document processor
         services.AddSingleton<IDocumentProcessor, DocumentProcessor>();
+        // Argha - 2026-03-22 - #74 - UrlScraper: registered as IUrlScraper via AddHttpClient so DI injects it into DocumentService
+        services.AddHttpClient<IUrlScraper, UrlScraper>().ConfigureHttpClient(c =>
+        {
+            // Timeout and UserAgent are applied in UrlScraper constructor from IOptions<UrlIngestionOptions>
+        });
 
         // Argha - 2026-03-02 - #6 - PostgreSQL replaces SQLite for persistent cross-deployment storage
         // EnableLegacyTimestampBehavior treats all DateTime as timestamp without time zone (no UTC conversion)

@@ -27,6 +27,10 @@
     <!-- Argha - 2026-02-21 - Azure AI Search vector store provider  -->
     <PackageReference Include="Azure.Search.Documents" Version="11.6.0" />
     <PackageReference Include="Tesseract" Version="5.2.0" />
+    <!-- Argha - 2026-03-22 - #74 - AngleSharp: HTML parser for URL ingestion (strip scripts/styles/nav) -->
+    <PackageReference Include="AngleSharp" Version="1.1.2" />
+    <!-- Argha - 2026-03-22 - #74 - YoutubeExplode: YouTube caption fetching for ingest-url pipeline -->
+    <PackageReference Include="YoutubeExplode" Version="6.4.3" />
   </ItemGroup>
 
   <ItemGroup>
