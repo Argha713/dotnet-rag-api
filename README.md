@@ -8,7 +8,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 [![Deploy](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml/badge.svg)](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat&logo=dotnet)
 ![C#](https://img.shields.io/badge/C%23-12-239120?style=flat&logo=csharp)
-![Tests](https://img.shields.io/badge/tests-409%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-424%20passing-brightgreen)
 ![Phase](https://img.shields.io/badge/phase-16%20complete%20✅-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
@@ -69,6 +69,14 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 - **Import flow** — Paste an existing API key to link a workspace to this browser session (validates via `GET /api/documents`, resolves ID via `GET /api/workspaces/current`)
 - **Dynamic key injection** — `WorkspaceKeyHandler` DelegatingHandler replaces the static `X-Api-Key` header on every outgoing request
 
+### Analytics & Observability ✅
+
+- **Query audit trail** — Every chat, search, and agent query (non-streaming) is persisted to a `QueryLogs` table scoped per workspace
+- **Cost estimation** — Per-query USD cost calculated from a pricing table in `appsettings.json`; supports OpenAI, Azure OpenAI, and local Ollama (free)
+- **Analytics endpoint** — `GET /api/analytics?days=N` (1–30, default 7) returns totals (queries, cost, avg latency, tokens) + per-day breakdown
+- **Analytics UI page** — `/analytics` route with 4 summary stat cards, CSS-only bar charts for queries/day and cost/day, 7/14/30 day selector
+- **Fail-open design** — Log failures never propagate to the user-facing request; warnings logged, response unaffected
+
 ### Expanded Document Intelligence ✅
 - **URL ingestion** — `POST /api/documents/ingest-url`: fetch any HTML page or YouTube video (captions → Whisper audio fallback), strip non-content, chunk, and embed
 - **XLSX / CSV support** — each row becomes a chunk as `Header1: Value | Header2: Value`; preserves spreadsheet context for retrieval
@@ -108,7 +116,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 - **GitHub Actions CI/CD** — Automated test, build, and deploy pipeline
 - **Azure deployment** — Container Apps (scales to zero) + Static Web Apps (free tier)
 - **Dark Orbital UI ✅** — Syne + DM Sans fonts, `#060608` background, teal/cyan glowing 3D orb with mouse-tracking parallax, vertical icon sidebar, quick-action hero cards
-- **409 unit tests** — xUnit + Moq + FluentAssertions across all layers
+- **424 unit tests** — xUnit + Moq + FluentAssertions across all layers
 
 ---
 
@@ -322,7 +330,7 @@ Cors__AllowedOrigins__0=https://your-frontend.azurestaticapps.net
 | **Frontend** | Blazor WebAssembly (.NET 8) — Inter design system, indigo theme |
 | **Hosting** | Azure Container Apps + Azure Static Web Apps |
 | **CI/CD** | GitHub Actions → GHCR → Azure |
-| **Testing** | xUnit, Moq, FluentAssertions (409 tests) |
+| **Testing** | xUnit, Moq, FluentAssertions (424 tests) |
 | **API Docs** | Swagger / OpenAPI |
 
 ---
@@ -338,7 +346,7 @@ dotnet-rag-api/
 │   ├── RagApi.Domain/           # Core entities
 │   └── RagApi.Infrastructure/   # Qdrant, OpenAI, Azure, EF Core
 ├── tests/
-│   └── RagApi.Tests/            # 409 unit tests
+│   └── RagApi.Tests/            # 424 unit tests
 ├── .github/workflows/           # CI, Deploy API, Deploy UI
 ├── docker-compose.yml           # Local Qdrant + Ollama + PostgreSQL
 ├── Dockerfile                   # Production container image

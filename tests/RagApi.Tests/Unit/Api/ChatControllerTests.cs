@@ -73,7 +73,13 @@ public class ChatControllerTests
             .Setup(v => v.ValidateAsync(It.IsAny<SearchRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ValidationResult());
 
-        _sut = new ChatController(ragService, conversationService, chatValidatorMock.Object, searchValidatorMock.Object);
+        // Argha - 2026-03-22 - #85 - Pass fail-open QueryLogService and WorkspaceContext mocks for Phase 13 analytics
+        var queryLogServiceMock = new Mock<IQueryLogService>();
+        queryLogServiceMock
+            .Setup(q => q.LogAsync(It.IsAny<QueryLogEntry>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        _sut = new ChatController(ragService, conversationService, chatValidatorMock.Object, searchValidatorMock.Object, queryLogServiceMock.Object, workspaceContext.Object);
     }
 
     [Fact]

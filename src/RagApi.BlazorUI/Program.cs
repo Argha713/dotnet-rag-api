@@ -30,5 +30,7 @@ builder.Services.AddScoped<ChatApiService>();
 builder.Services.AddScoped<DocumentApiService>();
 builder.Services.AddScoped<ConversationApiService>();
 builder.Services.AddScoped<WorkspaceApiService>();
+// Argha - 2026-03-22 - #91 - Analytics API service for the Analytics page
+builder.Services.AddScoped<AnalyticsApiService>();
 
 await builder.Build().RunAsync();

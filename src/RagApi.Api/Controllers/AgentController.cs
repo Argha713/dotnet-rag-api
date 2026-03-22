@@ -1,10 +1,13 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using RagApi.Api.Models;
+using RagApi.Application.Interfaces;
 using RagApi.Application.Models;
 using RagApi.Application.Services;
+using RagApi.Domain.Entities;
 
 namespace RagApi.Api.Controllers;
 
@@ -16,11 +19,22 @@ public class AgentController : ControllerBase
 {
     private readonly AgentService _agentService;
     private readonly AgentConfiguration _config;
+    // Argha - 2026-03-22 - #85 - Query audit log for agent queries
+    private readonly IQueryLogService _queryLogService;
+    // Argha - 2026-03-22 - #85 - Workspace context for log scoping
+    private readonly IWorkspaceContext _workspaceContext;
 
-    public AgentController(AgentService agentService, IOptions<AgentConfiguration> config)
+    // Argha - 2026-03-22 - #85 - Added IQueryLogService and IWorkspaceContext for Phase 13 analytics
+    public AgentController(
+        AgentService agentService,
+        IOptions<AgentConfiguration> config,
+        IQueryLogService queryLogService,
+        IWorkspaceContext workspaceContext)
     {
         _agentService = agentService;
         _config = config.Value;
+        _queryLogService = queryLogService;
+        _workspaceContext = workspaceContext;
     }
 
     /// <summary>
@@ -39,9 +53,11 @@ public class AgentController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
+        var sw = Stopwatch.StartNew();
         var result = await _agentService.RunAsync(request.Query, cancellationToken);
 
-        return Ok(new AgentResponseDto
+        // Argha - 2026-03-22 - #85 - Log agent query; SourceCount from result.Sources
+        var agentDto = new AgentResponseDto
         {
             Answer = result.Answer,
             Model = result.Model,
@@ -66,7 +82,19 @@ public class AgentController : ControllerBase
                     ToolOutput = s.ToolOutput
                 }).ToList()
             }
-        });
+        };
+
+        await _queryLogService.LogAsync(new QueryLogEntry(
+            _workspaceContext.Current.Id,
+            QueryType.Agent,
+            request.Query,
+            result.Model,
+            0,
+            sw.ElapsedMilliseconds,
+            result.Sources.Count,
+            true), cancellationToken);
+
+        return Ok(agentDto);
     }
 
     /// <summary>
@@ -74,6 +102,7 @@ public class AgentController : ControllerBase
     /// Each event is a JSON AgentStreamEvent. Final event type is "done".
     /// Returns 503 when Agent:Enabled is false.
     /// </summary>
+    // Argha - 2026-03-22 - #85 - SSE endpoint not logged: streaming accumulation is out of scope for Phase 13
     // Argha - 2026-03-22 - #65 - SSE streaming: client sees each reasoning step as it happens
     [HttpPost("stream")]
     public async Task StreamQuery([FromBody] AgentQueryRequest request, CancellationToken cancellationToken)

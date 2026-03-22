@@ -1,9 +1,11 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using RagApi.Api.Models;
+using RagApi.Application.Interfaces;
 using RagApi.Application.Services;
 using RagApi.Domain.Entities;
 
@@ -20,22 +22,31 @@ public class ChatController : ControllerBase
     private readonly RagService _ragService;
     private readonly ConversationService _conversationService;
 
-    // Argha - 2026-02-20 - FV validators for complex rules not covered by data annotations 
+    // Argha - 2026-02-20 - FV validators for complex rules not covered by data annotations
     private readonly IValidator<ChatRequest> _chatValidator;
     private readonly IValidator<SearchRequest> _searchValidator;
+    // Argha - 2026-03-22 - #85 - Query audit log: fail-open, never breaks user-facing response
+    private readonly IQueryLogService _queryLogService;
+    // Argha - 2026-03-22 - #85 - Workspace context: provides WorkspaceId for log scoping
+    private readonly IWorkspaceContext _workspaceContext;
 
-    // Argha - 2026-02-19 - Injected ConversationService for server-side session support 
-    // Argha - 2026-02-20 - Added FV validators for ChatRequest and SearchRequest 
+    // Argha - 2026-02-19 - Injected ConversationService for server-side session support
+    // Argha - 2026-02-20 - Added FV validators for ChatRequest and SearchRequest
+    // Argha - 2026-03-22 - #85 - Added IQueryLogService and IWorkspaceContext for Phase 13 analytics
     public ChatController(
         RagService ragService,
         ConversationService conversationService,
         IValidator<ChatRequest> chatValidator,
-        IValidator<SearchRequest> searchValidator)
+        IValidator<SearchRequest> searchValidator,
+        IQueryLogService queryLogService,
+        IWorkspaceContext workspaceContext)
     {
         _ragService = ragService;
         _conversationService = conversationService;
         _chatValidator = chatValidator;
         _searchValidator = searchValidator;
+        _queryLogService = queryLogService;
+        _workspaceContext = workspaceContext;
     }
 
     /// <summary>
@@ -77,16 +88,17 @@ public class ChatController : ControllerBase
                 : null;
         }
 
+        var sw = Stopwatch.StartNew();
         var response = await _ragService.ChatAsync(
             request.Query,
             history,
             request.TopK,
             request.DocumentId,
-            // Argha - 2026-02-19 - Pass tags filter for metadata-based retrieval 
+            // Argha - 2026-02-19 - Pass tags filter for metadata-based retrieval
             request.Tags,
-            // Argha - 2026-02-20 - Pass per-request hybrid search override 
+            // Argha - 2026-02-20 - Pass per-request hybrid search override
             request.UseHybridSearch,
-            // Argha - 2026-02-20 - Pass per-request MMR re-ranking override 
+            // Argha - 2026-02-20 - Pass per-request MMR re-ranking override
             request.UseReRanking,
             cancellationToken);
 
@@ -113,6 +125,17 @@ public class ChatController : ControllerBase
             }).ToList()
         };
 
+        // Argha - 2026-03-22 - #85 - Log query after response built; fail-open (QueryLogService never throws)
+        await _queryLogService.LogAsync(new QueryLogEntry(
+            _workspaceContext.Current.Id,
+            QueryType.Chat,
+            request.Query,
+            response.Model,
+            0,
+            sw.ElapsedMilliseconds,
+            dto.Sources.Count,
+            true), cancellationToken);
+
         return Ok(dto);
     }
 
@@ -125,6 +148,7 @@ public class ChatController : ControllerBase
     /// - "token": one per LLM output token
     /// - "done": signals end of stream
     /// </remarks>
+    // Argha - 2026-03-22 - #85 - SSE endpoint not logged: no single terminal response object to measure latency/sources
     // Argha - 2026-02-19 - SSE streaming endpoint for Phase 2.1
     [HttpPost("stream")]
     public async Task StreamChat([FromBody] ChatRequest request, CancellationToken cancellationToken)
@@ -232,15 +256,16 @@ public class ChatController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
+        var sw = Stopwatch.StartNew();
         var results = await _ragService.SearchAsync(
             request.Query,
             request.TopK,
             request.DocumentId,
-            // Argha - 2026-02-19 - Pass tags filter for tag-scoped semantic search 
+            // Argha - 2026-02-19 - Pass tags filter for tag-scoped semantic search
             request.Tags,
-            // Argha - 2026-02-20 - Pass per-request hybrid search override 
+            // Argha - 2026-02-20 - Pass per-request hybrid search override
             request.UseHybridSearch,
-            // Argha - 2026-02-20 - Pass per-request MMR re-ranking override 
+            // Argha - 2026-02-20 - Pass per-request MMR re-ranking override
             request.UseReRanking,
             cancellationToken);
 
@@ -253,6 +278,17 @@ public class ChatController : ControllerBase
             Score = r.Score,
             ChunkIndex = r.ChunkIndex
         }).ToList();
+
+        // Argha - 2026-03-22 - #85 - Log search query; model is null for Search (no LLM call)
+        await _queryLogService.LogAsync(new QueryLogEntry(
+            _workspaceContext.Current.Id,
+            QueryType.Search,
+            request.Query,
+            null,
+            0,
+            sw.ElapsedMilliseconds,
+            dtos.Count,
+            true), cancellationToken);
 
         return Ok(dtos);
     }

@@ -22,6 +22,9 @@ public class RagApiDbContext : DbContext
     // Argha - 2026-03-16 - #30 - DocumentImages table for Phase 14 multimodal RAG
     public DbSet<DocumentImage> DocumentImages => Set<DocumentImage>();
 
+    // Argha - 2026-03-22 - #85 - QueryLogs table for Phase 13 analytics audit trail
+    public DbSet<QueryLog> QueryLogs => Set<QueryLog>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Argha - 2026-03-04 - #17 - Workspace model configuration
@@ -168,6 +171,35 @@ public class RagApiDbContext : DbContext
             // Argha - 2026-03-17 - #39 - GetStreamAsync no longer uses this index; it queries by Id only
             // (GUID is the capability token — see PostgresImageStore.GetStreamAsync)
             entity.HasIndex(i => new { i.WorkspaceId, i.Id });
+        });
+
+        // Argha - 2026-03-22 - #85 - QueryLog model configuration
+        modelBuilder.Entity<QueryLog>(entity =>
+        {
+            entity.HasKey(q => q.Id);
+
+            entity.Property(q => q.QueryText)
+                .IsRequired()
+                .HasMaxLength(500);
+
+            entity.Property(q => q.Model)
+                .HasMaxLength(100);
+
+            entity.Property(q => q.QueryType)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            entity.Property(q => q.EstimatedCostUsd)
+                .HasPrecision(18, 8);
+
+            // Argha - 2026-03-22 - #85 - FK to Workspaces; deleting a workspace purges its query logs
+            entity.HasOne(q => q.Workspace)
+                .WithMany()
+                .HasForeignKey(q => q.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Argha - 2026-03-22 - #85 - Primary analytics access pattern: logs for workspace within date range
+            entity.HasIndex(q => new { q.WorkspaceId, q.LoggedAt });
         });
     }
 }

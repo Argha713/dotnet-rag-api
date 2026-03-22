@@ -1,0 +1,205 @@
+@* Argha - 2026-03-22 - #91 - Analytics page: usage metrics, cost tracking, query trends *@
+@page "/analytics"
+@inject AnalyticsApiService AnalyticsApi
+@inject WorkspaceStateService WsState
+@implements IDisposable
+
+<PageTitle>Analytics — RAG Chat</PageTitle>
+
+<div class="page-body-scroll">
+<div style="max-width:900px;margin:0 auto;padding:var(--space-6) var(--space-4);">
+
+    @* ── Page header ── *@
+    <div class="section-header">
+        <div>
+            <h1 class="section-title">Analytics</h1>
+            <p class="section-subtitle">
+                @if (_lastLoaded.HasValue)
+                {
+                    <span>Last updated @_lastLoaded.Value.ToString("HH:mm:ss") · @_days days</span>
+                }
+                else
+                {
+                    <span>Loading…</span>
+                }
+            </p>
+        </div>
+        <div style="display:flex;gap:var(--space-2);align-items:center;">
+            @* ── Day selector ── *@
+            @foreach (var d in new[] { 7, 14, 30 })
+            {
+                <button class="btn-ghost @(_days == d ? "active" : "")" @onclick="() => SelectDays(d)">@d d</button>
+            }
+            <button class="btn-ghost" @onclick="LoadDataAsync" disabled="@_isLoading">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="@(_isLoading ? "animation:spin 0.8s linear infinite;" : "")">
+                    <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    @* ── No workspace gate ── *@
+    @if (WsState.Active == null)
+    {
+        <div class="alert-modern alert-danger">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <div><strong>No workspace selected</strong> — <a href="/workspaces">select a workspace</a> to view analytics.</div>
+        </div>
+    }
+    else if (_isLoading && _data == null)
+    {
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:var(--space-12) 0;gap:var(--space-3);">
+            <div class="spinner-sm spinner-dark" style="width:28px;height:28px;border-width:3px;"></div>
+            <p style="font-size:var(--text-sm);color:var(--text-muted);margin:0;">Loading analytics…</p>
+        </div>
+    }
+    else if (_errorMessage != null)
+    {
+        <div class="alert-modern alert-danger">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <div><strong>Could not load analytics</strong> — @_errorMessage</div>
+        </div>
+    }
+    else if (_data != null)
+    {
+        @* ── Summary cards ── *@
+        <div class="analytics-summary-grid" style="margin-bottom:var(--space-6);">
+            <div class="analytics-stat-card">
+                <p class="stat-label">Total Queries</p>
+                <p class="stat-value">@_data.TotalQueries</p>
+            </div>
+            <div class="analytics-stat-card">
+                <p class="stat-label">Total Cost</p>
+                <p class="stat-value">$@_data.TotalCostUsd.ToString("F4")</p>
+            </div>
+            <div class="analytics-stat-card">
+                <p class="stat-label">Avg Latency</p>
+                <p class="stat-value">@((int)_data.AvgLatencyMs) ms</p>
+            </div>
+            <div class="analytics-stat-card">
+                <p class="stat-label">Total Tokens</p>
+                <p class="stat-value">@_data.TotalTokens</p>
+            </div>
+        </div>
+
+        @* ── Queries/day bar chart ── *@
+        @if (_data.DailyBreakdown.Any())
+        {
+            <div style="margin-bottom:var(--space-6);">
+                <h2 class="section-title" style="font-size:var(--text-base);margin-bottom:var(--space-3);">Queries per Day</h2>
+                @{ var maxQ = _data.DailyBreakdown.Max(d => d.QueryCount); }
+                <div class="chart-bars">
+                    @foreach (var day in _data.DailyBreakdown)
+                    {
+                        <div class="chart-bar-col">
+                            @if (maxQ > 0)
+                            {
+                                <div class="chart-bar" style="height:@((int)(day.QueryCount * 100.0 / maxQ))%;"></div>
+                            }
+                            else
+                            {
+                                <div class="chart-bar chart-bar-zero"></div>
+                            }
+                            <span class="chart-label">@day.Date.ToString("M/d")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @* ── Cost/day bar chart ── *@
+            <div>
+                <h2 class="section-title" style="font-size:var(--text-base);margin-bottom:var(--space-3);">Cost per Day (USD)</h2>
+                @{ var maxC = _data.DailyBreakdown.Max(d => d.CostUsd); }
+                <div class="chart-bars">
+                    @foreach (var day in _data.DailyBreakdown)
+                    {
+                        <div class="chart-bar-col">
+                            @if (maxC > 0)
+                            {
+                                <div class="chart-bar" style="height:@((int)(day.CostUsd * 100.0m / maxC))%;"></div>
+                            }
+                            else
+                            {
+                                <div class="chart-bar chart-bar-zero"></div>
+                            }
+                            <span class="chart-label">@day.Date.ToString("M/d")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <p style="font-size:var(--text-sm);color:var(--text-muted);text-align:center;padding:var(--space-8) 0;">
+                No queries recorded in the last @_days days.
+            </p>
+        }
+    }
+
+</div>
+</div>
+
+@code {
+    private AnalyticsDto? _data;
+    private bool _isLoading;
+    private string? _errorMessage;
+    private DateTime? _lastLoaded;
+    private int _days = 7;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            WsState.OnChanged += OnWorkspaceChanged;
+            await WsState.InitializeAsync();
+            if (WsState.Active != null)
+                await LoadDataAsync();
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        WsState.OnChanged -= OnWorkspaceChanged;
+    }
+
+    private void OnWorkspaceChanged() => InvokeAsync(async () =>
+    {
+        if (WsState.Active != null)
+            await LoadDataAsync();
+        StateHasChanged();
+    });
+
+    private async Task SelectDays(int days)
+    {
+        _days = days;
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        StateHasChanged();
+        try
+        {
+            _data = await AnalyticsApi.GetAnalyticsAsync(_days);
+            if (_data == null)
+                _errorMessage = "API returned no data.";
+            _lastLoaded = DateTime.Now;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}
