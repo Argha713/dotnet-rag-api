@@ -20,6 +20,25 @@ public class Document
     // Argha - 2026-02-21 - Timestamp of last re-process; null for documents never updated
     public DateTime? UpdatedAt { get; set; }
 
+    // Argha - 2026-03-22 - #78 - Document version; incremented on each UpdateDocumentAsync call
+    public int Version { get; set; } = 1;
+
+    // Argha - 2026-03-22 - #78 - SHA-256 hash of file bytes for deduplication; null for legacy docs
+    public string? ContentHash { get; set; }
+
+    // Argha - 2026-03-22 - #79 - Lazily generated summary text; null until first GET /summary request
+    public string? SummaryText { get; set; }
+
+    // Argha - 2026-03-22 - #79 - Timestamp when SummaryText was generated; used to check staleness
+    public DateTime? SummaryGeneratedAt { get; set; }
+
+    // Argha - 2026-03-22 - #80 - JSON array of LLM-suggested tags; reset to "[]" on SetTagsAsync
+    public string SuggestedTagsJson { get; set; } = "[]";
+
+    // Argha - 2026-03-22 - #78 - Transient flag; set to true by UploadDocumentAsync when a duplicate is found.
+    // Not persisted — excluded via Fluent API in RagApiDbContext.
+    public bool IsDuplicate { get; set; }
+
     // Argha - 2026-03-04 - #17 - FK to Workspaces; all document operations are scoped by workspace
     public Guid WorkspaceId { get; set; }
     public Workspace? Workspace { get; set; }

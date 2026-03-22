@@ -10,4 +10,6 @@ public interface IDocumentRepository
     Task<List<Document>> GetAllAsync(CancellationToken cancellationToken = default);
     Task UpdateAsync(Document document, CancellationToken cancellationToken = default);
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+    // Argha - 2026-03-22 - #78 - Lookup by SHA-256 hash within a workspace for deduplication
+    Task<Document?> GetByContentHashAsync(string hash, Guid workspaceId, CancellationToken cancellationToken = default);
 }

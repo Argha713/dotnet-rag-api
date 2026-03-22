@@ -63,4 +63,13 @@ public class DocumentRepository : IDocumentRepository
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
     }
+
+    // Argha - 2026-03-22 - #78 - Find existing document by SHA-256 hash within workspace for dedup check
+    public async Task<Document?> GetByContentHashAsync(string hash, Guid workspaceId, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Documents
+            .FirstOrDefaultAsync(
+                d => d.ContentHash == hash && d.WorkspaceId == workspaceId,
+                cancellationToken);
+    }
 }

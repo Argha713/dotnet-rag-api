@@ -20,7 +20,8 @@ public class ChunkingStrategyTests
     public ChunkingStrategyTests()
     {
         // Argha - 2026-03-20 - #51 - OCR service required by updated ctor; disabled for chunking tests
-        _processor = new DocumentProcessor(Mock.Of<ILogger<DocumentProcessor>>(), Mock.Of<IOcrService>());
+        // Argha - 2026-03-22 - #81 - Added IAudioTranscriptionService mock as third ctor param
+        _processor = new DocumentProcessor(Mock.Of<ILogger<DocumentProcessor>>(), Mock.Of<IOcrService>(), Mock.Of<IAudioTranscriptionService>());
     }
 
     // --- Fixed (regression) ---

@@ -261,6 +261,131 @@ public class DocumentsController : ControllerBase
         return Ok(_documentService.GetSupportedContentTypes());
     }
 
+    // Argha - 2026-03-22 - #74 - Ingest content from a URL (HTML or YouTube)
+    [HttpPost("ingest-url")]
+    [ProducesResponseType(typeof(DocumentDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status415UnsupportedMediaType)]
+    public async Task<IActionResult> IngestUrl([FromBody] IngestUrlRequest request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
+
+        ChunkingStrategy? parsedStrategy = null;
+        if (!string.IsNullOrWhiteSpace(request.ChunkingStrategy))
+        {
+            if (!Enum.TryParse<ChunkingStrategy>(request.ChunkingStrategy, ignoreCase: true, out var s))
+                return BadRequest(new { error = $"Invalid chunkingStrategy '{request.ChunkingStrategy}'. Valid values: {string.Join(", ", Enum.GetNames<ChunkingStrategy>())}" });
+            parsedStrategy = s;
+        }
+
+        try
+        {
+            var document = await _documentService.IngestUrlAsync(request.Url, request.Tags, parsedStrategy, cancellationToken);
+            var dto = MapToDto(document);
+            return CreatedAtAction(nameof(GetDocument), new { id = document.Id }, dto);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (NotSupportedException ex)
+        {
+            return StatusCode(StatusCodes.Status415UnsupportedMediaType, new { error = ex.Message });
+        }
+    }
+
+    // Argha - 2026-03-22 - #82 - Ingest all supported files inside a ZIP archive
+    [HttpPost("ingest-zip")]
+    [RequestSizeLimit(200_000_000)]
+    [ProducesResponseType(typeof(BatchUploadResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> IngestZip(IFormFile file, [FromForm] List<string>? tags, [FromForm] string? chunkingStrategy, CancellationToken cancellationToken)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { error = "No ZIP file provided" });
+
+        ChunkingStrategy? parsedStrategy = null;
+        if (!string.IsNullOrWhiteSpace(chunkingStrategy))
+        {
+            if (!Enum.TryParse<ChunkingStrategy>(chunkingStrategy, ignoreCase: true, out var s))
+                return BadRequest(new { error = $"Invalid chunkingStrategy '{chunkingStrategy}'. Valid values: {string.Join(", ", Enum.GetNames<ChunkingStrategy>())}" });
+            parsedStrategy = s;
+        }
+
+        await using var stream = file.OpenReadStream();
+        var results = await _documentService.IngestZipAsync(stream, tags, parsedStrategy, cancellationToken);
+
+        var dto = new BatchUploadResultDto
+        {
+            TotalFiles = results.Count,
+            Succeeded = results.Count(r => r.Succeeded),
+            Failed = results.Count(r => !r.Succeeded),
+            Results = results.Select(r => new BatchUploadItemResultDto
+            {
+                FileName = r.FileName,
+                Succeeded = r.Succeeded,
+                DocumentId = r.DocumentId,
+                ChunkCount = r.ChunkCount,
+                ErrorMessage = r.ErrorMessage
+            }).ToList()
+        };
+
+        return Ok(dto);
+    }
+
+    // Argha - 2026-03-22 - #79 - Get (or generate) a lazy summary for a document
+    [HttpGet("{id:guid}/summary")]
+    [ProducesResponseType(typeof(DocumentSummaryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetDocumentSummary(Guid id, CancellationToken cancellationToken)
+    {
+        var document = await _documentService.GetDocumentAsync(id, cancellationToken);
+        if (document == null)
+            return NotFound(new { error = "Document not found" });
+
+        var summary = await _documentService.GetDocumentSummaryAsync(id, cancellationToken);
+        if (summary == null)
+            return NotFound(new { error = "Summary could not be generated for this document" });
+
+        return Ok(new DocumentSummaryDto
+        {
+            DocumentId = id,
+            Summary = summary,
+            GeneratedAt = document.SummaryGeneratedAt
+        });
+    }
+
+    // Argha - 2026-03-22 - #80 - Get (or generate) LLM tag suggestions for a document
+    [HttpGet("{id:guid}/tags/suggestions")]
+    [ProducesResponseType(typeof(TagSuggestionsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetTagSuggestions(Guid id, CancellationToken cancellationToken)
+    {
+        var document = await _documentService.GetDocumentAsync(id, cancellationToken);
+        if (document == null)
+            return NotFound(new { error = "Document not found" });
+
+        var tags = await _documentService.GetTagSuggestionsAsync(id, cancellationToken);
+        return Ok(new TagSuggestionsDto { DocumentId = id, Tags = tags });
+    }
+
+    // Argha - 2026-03-22 - #80 - Overwrite user-assigned tags and reset auto-tag cache
+    [HttpPut("{id:guid}/tags")]
+    [ProducesResponseType(typeof(DocumentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetTags(Guid id, [FromBody] SetTagsRequest request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
+
+        var document = await _documentService.SetTagsAsync(id, request.Tags, cancellationToken);
+        if (document == null)
+            return NotFound(new { error = "Document not found" });
+
+        return Ok(MapToDto(document));
+    }
+
     private static DocumentDto MapToDto(Domain.Entities.Document document)
     {
         return new DocumentDto
@@ -275,8 +400,11 @@ public class DocumentsController : ControllerBase
             ErrorMessage = document.ErrorMessage,
             // Argha - 2026-02-19 - Deserialize TagsJson for API response
             Tags = JsonSerializer.Deserialize<List<string>>(document.TagsJson) ?? new List<string>(),
-            // Argha - 2026-02-21 - Null for documents never re-processed 
-            UpdatedAt = document.UpdatedAt
+            // Argha - 2026-02-21 - Null for documents never re-processed
+            UpdatedAt = document.UpdatedAt,
+            // Argha - 2026-03-22 - #78 - Phase 12: version and duplicate flag
+            Version = document.Version,
+            IsDuplicate = document.IsDuplicate
         };
     }
 }

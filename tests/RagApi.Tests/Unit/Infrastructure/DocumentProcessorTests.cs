@@ -21,7 +21,8 @@ public class DocumentProcessorTests
     {
         var loggerMock = new Mock<ILogger<DocumentProcessor>>();
         // Argha - 2026-03-20 - #51 - NullOcrService (OCR disabled) for non-OCR tests
-        _sut = new DocumentProcessor(loggerMock.Object, Mock.Of<IOcrService>());
+        // Argha - 2026-03-22 - #81 - Added NullAudioTranscriptionService mock as third ctor param
+        _sut = new DocumentProcessor(loggerMock.Object, Mock.Of<IOcrService>(), Mock.Of<IAudioTranscriptionService>());
     }
 
     [Theory]
@@ -51,12 +52,13 @@ public class DocumentProcessorTests
     }
 
     [Fact]
-    public void SupportedContentTypes_ContainsAllFourTypes()
+    public void SupportedContentTypes_ContainsCoreTypes()
     {
-        _sut.SupportedContentTypes.Should().HaveCount(4);
+        // Argha - 2026-03-22 - #83 - Phase 12 extended to 10 types; check presence rather than exact count
         _sut.SupportedContentTypes.Should().Contain("application/pdf");
         _sut.SupportedContentTypes.Should().Contain("text/plain");
         _sut.SupportedContentTypes.Should().Contain("text/markdown");
+        _sut.SupportedContentTypes.Should().Contain("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     }
 
     [Fact]
@@ -382,7 +384,8 @@ public class DocumentProcessorTests
         ocrMock.Setup(s => s.IsEnabled).Returns(true);
 
         var logger = new Mock<ILogger<DocumentProcessor>>();
-        var sut = new DocumentProcessor(logger.Object, ocrMock.Object);
+        // Argha - 2026-03-22 - #81 - Added IAudioTranscriptionService mock as third ctor param
+        var sut = new DocumentProcessor(logger.Object, ocrMock.Object, Mock.Of<IAudioTranscriptionService>());
 
         var builder = new PdfDocumentBuilder();
         var page = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
@@ -409,7 +412,8 @@ public class DocumentProcessorTests
         ocrMock.Setup(s => s.IsEnabled).Returns(false);
 
         var logger = new Mock<ILogger<DocumentProcessor>>();
-        var sut = new DocumentProcessor(logger.Object, ocrMock.Object);
+        // Argha - 2026-03-22 - #81 - Added IAudioTranscriptionService mock as third ctor param
+        var sut = new DocumentProcessor(logger.Object, ocrMock.Object, Mock.Of<IAudioTranscriptionService>());
 
         var builder = new PdfDocumentBuilder();
         builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4); // no text, no images
@@ -435,7 +439,8 @@ public class DocumentProcessorTests
                .ReturnsAsync("should not be called");
 
         var logger = new Mock<ILogger<DocumentProcessor>>();
-        var sut = new DocumentProcessor(logger.Object, ocrMock.Object);
+        // Argha - 2026-03-22 - #81 - Added IAudioTranscriptionService mock as third ctor param
+        var sut = new DocumentProcessor(logger.Object, ocrMock.Object, Mock.Of<IAudioTranscriptionService>());
 
         var builder = new PdfDocumentBuilder();
         builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);

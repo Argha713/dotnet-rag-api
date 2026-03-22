@@ -4,7 +4,7 @@ using RagApi.Application.Models;
 using RagApi.Domain.Entities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-// Argha - 2026-02-15 - Commented out: replaced in-memory storage with IDocumentRepository 
+// Argha - 2026-02-15 - Commented out: replaced in-memory storage with IDocumentRepository
 // using System.Collections.Concurrent;
 
 namespace RagApi.Application.Services;
@@ -38,11 +38,19 @@ public class DocumentService
     // Argha - 2026-03-18 - #52 - Maximum images to describe per document; caps GPT-4o-mini cost per upload
     private readonly int _maxImagesPerDocument;
 
+    // Argha - 2026-03-22 - #74 - URL scraper for ingest-url pipeline; null when not registered
+    private readonly IUrlScraper? _urlScraper;
+
+    // Argha - 2026-03-22 - #79 - Chat service for lazy summary generation and auto-tagging; null when not registered
+    private readonly IChatService? _chatService;
+
     // Argha - 2026-02-20 - Added IOptions<DocumentProcessingOptions> for configurable chunking
     // Argha - 2026-02-21 - Added IOptions<BatchUploadOptions> for batch upload settings
     // Argha - 2026-03-04 - #17 - Added IWorkspaceContext for per-request collection name
     // Argha - 2026-03-17 - #36 - Added optional IVisionService + IImageStore for multimodal ingestion
     // Argha - 2026-03-18 - #52 - Added optional IOptions<VisionOptions> for cost guard (MaxImagesPerDocument)
+    // Argha - 2026-03-22 - #74 - Added optional IUrlScraper for URL ingestion
+    // Argha - 2026-03-22 - #79 - Added optional IChatService for lazy summarization and auto-tagging
     public DocumentService(
         IDocumentProcessor documentProcessor,
         IEmbeddingService embeddingService,
@@ -54,7 +62,11 @@ public class DocumentService
         IOptions<BatchUploadOptions>? batchOptions = null,
         IVisionService? visionService = null,
         IImageStore? imageStore = null,
-        IOptions<VisionOptions>? visionOptions = null)
+        IOptions<VisionOptions>? visionOptions = null,
+        // Argha - 2026-03-22 - #74 - Optional: URL scraper for ingest-url pipeline
+        IUrlScraper? urlScraper = null,
+        // Argha - 2026-03-22 - #79 - Optional: chat service for lazy summary + tag suggestions
+        IChatService? chatService = null)
     {
         _documentProcessor = documentProcessor;
         _embeddingService = embeddingService;
@@ -68,13 +80,15 @@ public class DocumentService
         _visionService = visionService;
         _imageStore = imageStore;
         _maxImagesPerDocument = visionOptions?.Value.MaxImagesPerDocument ?? 20;
+        _urlScraper = urlScraper;
+        _chatService = chatService;
     }
 
     /// <summary>
     /// Upload and process a document
     /// </summary>
-    // Argha - 2026-02-19 - Added optional tags parameter for metadata filtering 
-    // Argha - 2026-02-20 - Added optional chunkingStrategy parameter for configurable chunking 
+    // Argha - 2026-02-19 - Added optional tags parameter for metadata filtering
+    // Argha - 2026-02-20 - Added optional chunkingStrategy parameter for configurable chunking
     public async Task<Document> UploadDocumentAsync(Stream fileStream, string fileName, string contentType, List<string>? tags = null, ChunkingStrategy? chunkingStrategy = null, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Uploading document: {FileName} ({ContentType})", fileName, contentType);
@@ -86,6 +100,27 @@ public class DocumentService
                 $"Content type '{contentType}' is not supported. Supported types: {string.Join(", ", _documentProcessor.SupportedContentTypes)}");
         }
 
+        // Argha - 2026-03-22 - #78 - Compute SHA-256 hash for deduplication before creating any DB record
+        string? contentHash = null;
+        if (fileStream.CanSeek)
+        {
+            var fileBytes = new byte[fileStream.Length];
+            await fileStream.ReadExactlyAsync(fileBytes, 0, fileBytes.Length, cancellationToken);
+            fileStream.Position = 0;
+
+            using var sha256 = System.Security.Cryptography.SHA256.Create();
+            contentHash = Convert.ToHexString(sha256.ComputeHash(fileBytes)).ToLowerInvariant();
+
+            // Argha - 2026-03-22 - #78 - Early return if duplicate found in this workspace; caller checks IsDuplicate
+            var existing = await _documentRepository.GetByContentHashAsync(contentHash, _workspaceContext.Current.Id, cancellationToken);
+            if (existing != null)
+            {
+                _logger.LogInformation("Duplicate document detected (hash={Hash}); returning existing {DocumentId}", contentHash, existing.Id);
+                existing.IsDuplicate = true;
+                return existing;
+            }
+        }
+
         var normalizedTags = tags ?? new List<string>();
 
         // Create document record
@@ -95,10 +130,12 @@ public class DocumentService
             ContentType = contentType,
             FileSize = fileStream.Length,
             Status = DocumentStatus.Processing,
-            // Argha - 2026-02-19 - Persist tags as JSON 
-            TagsJson = JsonSerializer.Serialize(normalizedTags)
+            // Argha - 2026-02-19 - Persist tags as JSON
+            TagsJson = JsonSerializer.Serialize(normalizedTags),
+            // Argha - 2026-03-22 - #78 - Store hash so future uploads can dedup against this document
+            ContentHash = contentHash
         };
-        // Argha - 2026-02-15 - Commented out: was in-memory storage 
+        // Argha - 2026-02-15 - Commented out: was in-memory storage
         // _documents[document.Id] = document;
         await _documentRepository.AddAsync(document, cancellationToken);
 
@@ -116,7 +153,7 @@ public class DocumentService
             _logger.LogDebug("Extracted {Length} characters from document", text.Length);
 
             // Step 2: Chunk the text
-            // Argha - 2026-02-20 - Build ChunkingOptions from config defaults, override strategy if supplied 
+            // Argha - 2026-02-20 - Build ChunkingOptions from config defaults, override strategy if supplied
             var effectiveStrategy = chunkingStrategy
                 ?? (Enum.TryParse<ChunkingStrategy>(_processingOptions.DefaultChunkingStrategy, ignoreCase: true, out var parsed)
                     ? parsed
@@ -142,7 +179,7 @@ public class DocumentService
                 chunks[i].Embedding = embeddings[i];
                 chunks[i].Metadata["fileName"] = fileName;
                 chunks[i].Metadata["contentType"] = contentType;
-                // Argha - 2026-02-19 - Propagate tags to each chunk for Qdrant payload 
+                // Argha - 2026-02-19 - Propagate tags to each chunk for Qdrant payload
                 chunks[i].Tags = normalizedTags;
             }
 
@@ -189,7 +226,7 @@ public class DocumentService
         }
     }
 
-    // Argha - 2026-02-21 - Update an existing document: replace content and re-process from scratch 
+    // Argha - 2026-02-21 - Update an existing document: replace content and re-process from scratch
     /// <summary>
     /// Replace an existing document's content and re-process it.
     /// Deletes old vector chunks, runs the full extract → chunk → embed → upsert pipeline,
@@ -302,6 +339,8 @@ public class DocumentService
             document.ContentType = contentType;
             document.FileSize = fileStream.Length;
             document.TagsJson = JsonSerializer.Serialize(normalizedTags);
+            // Argha - 2026-03-22 - #78 - Increment version on every content update
+            document.Version++;
             document.Status = DocumentStatus.Completed;
             document.ChunkCount = chunks.Count + imageChunks.Count;
             document.UpdatedAt = DateTime.UtcNow;
@@ -329,7 +368,7 @@ public class DocumentService
     /// </summary>
     public async Task<Document?> GetDocumentAsync(Guid documentId, CancellationToken cancellationToken = default)
     {
-        // Argha - 2026-02-15 - Commented out: was in-memory lookup 
+        // Argha - 2026-02-15 - Commented out: was in-memory lookup
         // _documents.TryGetValue(documentId, out var document);
         // return Task.FromResult(document);
         return await _documentRepository.GetByIdAsync(documentId, cancellationToken);
@@ -338,10 +377,10 @@ public class DocumentService
     /// <summary>
     /// Get all documents, optionally filtered by a tag
     /// </summary>
-    // Argha - 2026-02-19 - Added optional tag filter; filtering done in memory 
+    // Argha - 2026-02-19 - Added optional tag filter; filtering done in memory
     public async Task<List<Document>> GetAllDocumentsAsync(string? tag = null, CancellationToken cancellationToken = default)
     {
-        // Argha - 2026-02-15 - Commented out: was in-memory list 
+        // Argha - 2026-02-15 - Commented out: was in-memory list
         // return Task.FromResult(_documents.Values.ToList());
         var all = await _documentRepository.GetAllAsync(cancellationToken);
 
@@ -370,11 +409,209 @@ public class DocumentService
         // Argha - 2026-03-04 - #17 - Use workspace's collection name for tenant isolation
         await _vectorStore.DeleteDocumentChunksAsync(_workspaceContext.Current.CollectionName, documentId, cancellationToken);
 
-        // Argha - 2026-02-15 - Commented out: was in-memory removal 
+        // Argha - 2026-02-15 - Commented out: was in-memory removal
         // _documents.TryRemove(documentId, out _);
         await _documentRepository.DeleteAsync(documentId, cancellationToken);
 
         _logger.LogInformation("Document {DocumentId} deleted successfully", documentId);
+    }
+
+    // Argha - 2026-03-22 - #74 - Ingest a URL by scraping its content and feeding through the standard upload pipeline
+    /// <summary>
+    /// Scrape a URL and ingest the resulting text as a document.
+    /// Requires IUrlScraper to be registered in DI.
+    /// </summary>
+    public async Task<Document> IngestUrlAsync(
+        string url,
+        List<string>? tags = null,
+        ChunkingStrategy? chunkingStrategy = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (_urlScraper == null)
+            throw new InvalidOperationException("URL scraping is not configured. Ensure IUrlScraper is registered.");
+
+        _logger.LogInformation("Ingesting URL: {Url}", url);
+        var (text, fileName) = await _urlScraper.ScrapeAsync(url, cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(text))
+            throw new InvalidOperationException($"No content could be scraped from URL: {url}");
+
+        // Argha - 2026-03-22 - #74 - Feed scraped text as a MemoryStream through the standard upload pipeline
+        var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(text));
+        return await UploadDocumentAsync(stream, fileName, "text/plain", tags, chunkingStrategy, cancellationToken);
+    }
+
+    // Argha - 2026-03-22 - #82 - Ingest all supported files inside a ZIP archive as a batch upload
+    /// <summary>
+    /// Unpack a ZIP archive and ingest each supported file through the standard upload pipeline.
+    /// Unsupported entries are silently skipped; partial failures are returned as failed BatchUploadItemResult entries.
+    /// </summary>
+    public async Task<List<BatchUploadItemResult>> IngestZipAsync(
+        Stream zipStream,
+        List<string>? tags = null,
+        ChunkingStrategy? chunkingStrategy = null,
+        CancellationToken cancellationToken = default)
+    {
+        using var archive = new System.IO.Compression.ZipArchive(zipStream, System.IO.Compression.ZipArchiveMode.Read, leaveOpen: true);
+        var files = new List<(Stream Stream, string FileName, string ContentType)>();
+
+        foreach (var entry in archive.Entries)
+        {
+            // Argha - 2026-03-22 - #82 - Skip directory entries and hidden/system files
+            if (string.IsNullOrWhiteSpace(entry.Name) || entry.Name.StartsWith('.'))
+                continue;
+
+            var contentType = GetContentTypeFromFileName(entry.Name);
+            if (!_documentProcessor.IsSupported(contentType))
+                continue;
+
+            // Argha - 2026-03-22 - #82 - Copy entry to MemoryStream so archive can be disposed without invalidating stream
+            var ms = new MemoryStream();
+            using (var entryStream = entry.Open())
+                await entryStream.CopyToAsync(ms, cancellationToken);
+            ms.Position = 0;
+
+            files.Add((ms, entry.Name, contentType));
+        }
+
+        if (files.Count == 0)
+            return new List<BatchUploadItemResult>();
+
+        return await BatchUploadDocumentsAsync(files, tags, chunkingStrategy, cancellationToken);
+    }
+
+    // Argha - 2026-03-22 - #82 - Map file extension to MIME type for ZIP entry dispatch
+    private static string GetContentTypeFromFileName(string fileName)
+    {
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        return ext switch
+        {
+            ".pdf" => "application/pdf",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".txt" => "text/plain",
+            ".md" or ".markdown" => "text/markdown",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".csv" => "text/csv",
+            ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ".mp3" => "audio/mpeg",
+            ".wav" => "audio/wav",
+            ".mp4" or ".m4a" => "audio/mp4",
+            _ => "application/octet-stream"
+        };
+    }
+
+    // Argha - 2026-03-22 - #79 - Lazy summary generation: generates via LLM on first call, returns cached on subsequent calls
+    /// <summary>
+    /// Get or generate a 2–3 paragraph summary for the document.
+    /// On first call the summary is generated via the chat service and cached on the document record.
+    /// Returns null if the document does not exist, the chat service is unavailable, or no chunks are found.
+    /// </summary>
+    public async Task<string?> GetDocumentSummaryAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        var document = await _documentRepository.GetByIdAsync(documentId, cancellationToken);
+        if (document == null) return null;
+
+        // Argha - 2026-03-22 - #79 - Return cached summary if already generated
+        if (!string.IsNullOrWhiteSpace(document.SummaryText))
+            return document.SummaryText;
+
+        if (_chatService == null)
+        {
+            _logger.LogWarning("Summary requested for {DocumentId} but no chat service is configured", documentId);
+            return null;
+        }
+
+        _logger.LogInformation("Generating summary for document {DocumentId}", documentId);
+
+        // Argha - 2026-03-22 - #79 - Generate an embedding for the document filename to find the most relevant chunks
+        var queryEmbedding = await _embeddingService.GenerateEmbeddingAsync(
+            $"content of {document.FileName}", cancellationToken);
+
+        var chunks = await _vectorStore.SearchAsync(
+            _workspaceContext.Current.CollectionName,
+            queryEmbedding,
+            topK: 10,
+            filterByDocumentId: documentId,
+            cancellationToken: cancellationToken);
+
+        if (chunks.Count == 0) return null;
+
+        var context = string.Join("\n\n", chunks.Select(c => c.Content));
+        var prompt = $"Summarize the following document content in 2-3 concise paragraphs:\n\n{context}";
+        var summary = await _chatService.GenerateResponseAsync(prompt, new List<ChatMessage>(), cancellationToken);
+
+        document.SummaryText = summary;
+        document.SummaryGeneratedAt = DateTime.UtcNow;
+        await _documentRepository.UpdateAsync(document, cancellationToken);
+
+        return summary;
+    }
+
+    // Argha - 2026-03-22 - #80 - Lazy auto-tagging: suggests 3-5 tags via LLM on first call, cached in SuggestedTagsJson
+    /// <summary>
+    /// Get or generate tag suggestions for a document.
+    /// On first call suggestions are generated via the chat service and cached on the document record.
+    /// Returns an empty list if the document does not exist, the chat service is unavailable, or LLM returns invalid JSON.
+    /// </summary>
+    public async Task<List<string>> GetTagSuggestionsAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        var document = await _documentRepository.GetByIdAsync(documentId, cancellationToken);
+        if (document == null) return new List<string>();
+
+        // Argha - 2026-03-22 - #80 - Return cached suggestions if available
+        var cached = JsonSerializer.Deserialize<List<string>>(document.SuggestedTagsJson) ?? new List<string>();
+        if (cached.Count > 0) return cached;
+
+        if (_chatService == null) return new List<string>();
+
+        // Argha - 2026-03-22 - #80 - Generate embedding to find relevant chunks for context
+        var queryEmbedding = await _embeddingService.GenerateEmbeddingAsync(
+            $"topics and keywords in {document.FileName}", cancellationToken);
+
+        var chunks = await _vectorStore.SearchAsync(
+            _workspaceContext.Current.CollectionName,
+            queryEmbedding,
+            topK: 5,
+            filterByDocumentId: documentId,
+            cancellationToken: cancellationToken);
+
+        if (chunks.Count == 0) return new List<string>();
+
+        var context = string.Join("\n\n", chunks.Select(c => c.Content));
+        var prompt = $"Suggest exactly 3-5 concise tags (single words or short phrases) for the following document. Reply with ONLY a JSON array of strings, nothing else:\n\n{context}";
+        var response = await _chatService.GenerateResponseAsync(prompt, new List<ChatMessage>(), cancellationToken);
+
+        List<string> suggestions;
+        try
+        {
+            suggestions = JsonSerializer.Deserialize<List<string>>(response.Trim()) ?? new List<string>();
+        }
+        catch
+        {
+            // Argha - 2026-03-22 - #80 - LLM did not return valid JSON array; return empty rather than throw
+            suggestions = new List<string>();
+        }
+
+        document.SuggestedTagsJson = JsonSerializer.Serialize(suggestions);
+        await _documentRepository.UpdateAsync(document, cancellationToken);
+        return suggestions;
+    }
+
+    // Argha - 2026-03-22 - #80 - Overwrite user-assigned tags and reset the LLM-suggested tags cache
+    /// <summary>
+    /// Replace all tags on a document and clear the suggested-tags cache so it will be regenerated on next call.
+    /// Returns null if the document does not exist.
+    /// </summary>
+    public async Task<Document?> SetTagsAsync(Guid documentId, List<string> tags, CancellationToken cancellationToken = default)
+    {
+        var document = await _documentRepository.GetByIdAsync(documentId, cancellationToken);
+        if (document == null) return null;
+
+        document.TagsJson = JsonSerializer.Serialize(tags);
+        // Argha - 2026-03-22 - #80 - Reset suggested tags so they will be regenerated on next GetTagSuggestionsAsync call
+        document.SuggestedTagsJson = "[]";
+        await _documentRepository.UpdateAsync(document, cancellationToken);
+        return document;
     }
 
     // Argha - 2026-03-17 - #36 - Best-effort: describe each extracted image with the vision service,
@@ -478,7 +715,7 @@ public class DocumentService
         return _documentProcessor.SupportedContentTypes;
     }
 
-    // Argha - 2026-02-21 - Batch upload: process multiple files concurrently with bounded parallelism 
+    // Argha - 2026-02-21 - Batch upload: process multiple files concurrently with bounded parallelism
     /// <summary>
     /// Upload and process multiple documents concurrently.
     /// Partial failure is allowed — exceptions per file are caught and returned as failed results,
@@ -548,7 +785,7 @@ public class DocumentService
     }
 }
 
-// Argha - 2026-02-21 - Internal result model for batch upload, mapped to DTO at the controller layer 
+// Argha - 2026-02-21 - Internal result model for batch upload, mapped to DTO at the controller layer
 /// <summary>
 /// Per-file result produced by DocumentService.BatchUploadDocumentsAsync
 /// </summary>

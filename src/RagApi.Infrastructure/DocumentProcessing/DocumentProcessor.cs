@@ -3,6 +3,7 @@ using DocumentFormat.OpenXml.Wordprocessing;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
 using UglyToad.PdfPig.Tokens;
+using UglyToad.PdfPig.DocumentLayoutAnalysis.WordExtractor;
 using RagApi.Application.Interfaces;
 using RagApi.Domain.Entities;
 using Microsoft.Extensions.Logging;
@@ -21,19 +22,30 @@ public class DocumentProcessor : IDocumentProcessor
     private readonly ILogger<DocumentProcessor> _logger;
     // Argha - 2026-03-20 - #51 - OCR service injected for scanned PDF fallback; NullOcrService when disabled
     private readonly IOcrService _ocrService;
+    // Argha - 2026-03-22 - #81 - Audio transcription service; NullAudioTranscriptionService when provider is Ollama
+    private readonly IAudioTranscriptionService _audioTranscriptionService;
 
+    // Argha - 2026-03-22 - #75 - Extended with XLSX, CSV, PPTX, and audio MIME types
     private static readonly IReadOnlyList<string> _supportedTypes = new[]
     {
         "application/pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "text/plain",
-        "text/markdown"
+        "text/markdown",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "text/csv",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "audio/mpeg",
+        "audio/wav",
+        "audio/mp4"
     };
 
-    public DocumentProcessor(ILogger<DocumentProcessor> logger, IOcrService ocrService)
+    // Argha - 2026-03-22 - #81 - Added IAudioTranscriptionService as second parameter after IOcrService
+    public DocumentProcessor(ILogger<DocumentProcessor> logger, IOcrService ocrService, IAudioTranscriptionService audioTranscriptionService)
     {
         _logger = logger;
         _ocrService = ocrService;
+        _audioTranscriptionService = audioTranscriptionService;
     }
 
     public IReadOnlyList<string> SupportedContentTypes => _supportedTypes;
@@ -46,11 +58,16 @@ public class DocumentProcessor : IDocumentProcessor
     public async Task<string> ExtractTextAsync(Stream fileStream, string contentType, CancellationToken cancellationToken = default)
     {
         // Argha - 2026-03-20 - #51 - PDF branch is now async to support OCR fallback
+        // Argha - 2026-03-22 - #75 - Added XLSX, CSV, PPTX, and audio cases
         return contentType.ToLowerInvariant() switch
         {
             "application/pdf" => await ExtractFromPdfAsync(fileStream, cancellationToken),
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => ExtractFromDocx(fileStream),
             "text/plain" or "text/markdown" => await ExtractFromTextAsync(fileStream, cancellationToken),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" => await ExcelCsvParser.ExtractFromXlsxAsync(fileStream, cancellationToken),
+            "text/csv" => await ExcelCsvParser.ExtractFromCsvAsync(fileStream, cancellationToken),
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation" => await PptxParser.ExtractFromPptxAsync(fileStream, cancellationToken),
+            "audio/mpeg" or "audio/wav" or "audio/mp4" => await TranscribeAudioAsync(fileStream, contentType, cancellationToken),
             _ => throw new NotSupportedException($"Content type '{contentType}' is not supported")
         };
     }
@@ -65,11 +82,13 @@ public class DocumentProcessor : IDocumentProcessor
         if (string.IsNullOrWhiteSpace(text))
             return new List<DocumentChunk>();
 
-        // Argha - 2026-02-20 - Dispatch to the appropriate strategy 
+        // Argha - 2026-02-20 - Dispatch to the appropriate strategy
+        // Argha - 2026-03-22 - #77 - Added Hierarchical case
         var chunks = options.Strategy switch
         {
             ChunkingStrategy.Sentence => ChunkBySentence(documentId, text, options),
             ChunkingStrategy.Paragraph => ChunkByParagraph(documentId, text),
+            ChunkingStrategy.Hierarchical => ChunkByHierarchical(documentId, text, options),
             _ => ChunkByFixed(documentId, text, options)
         };
 
@@ -79,7 +98,7 @@ public class DocumentProcessor : IDocumentProcessor
         return chunks;
     }
 
-    // Argha - 2026-02-20 - Existing paragraph-aware fixed-size chunking, now extracted to a private method 
+    // Argha - 2026-02-20 - Existing paragraph-aware fixed-size chunking, now extracted to a private method
     private static List<DocumentChunk> ChunkByFixed(Guid documentId, string text, ChunkingOptions options)
     {
         var chunks = new List<DocumentChunk>();
@@ -129,7 +148,7 @@ public class DocumentProcessor : IDocumentProcessor
         return chunks;
     }
 
-    // Argha - 2026-02-20 - Sentence-based chunking: splits at .!? boundaries, groups into size-limited chunks 
+    // Argha - 2026-02-20 - Sentence-based chunking: splits at .!? boundaries, groups into size-limited chunks
     private static List<DocumentChunk> ChunkBySentence(Guid documentId, string text, ChunkingOptions options)
     {
         var chunks = new List<DocumentChunk>();
@@ -147,11 +166,11 @@ public class DocumentProcessor : IDocumentProcessor
         var chunkIndex = 0;
         var position = 0;
         var chunkStartPosition = 0;
-        var lastSentence = string.Empty; // Argha - 2026-02-20 - One-sentence overlap 
+        var lastSentence = string.Empty; // Argha - 2026-02-20 - One-sentence overlap
 
         foreach (var sentence in sentences)
         {
-            // Argha - 2026-02-20 - When adding this sentence would overflow, flush current chunk 
+            // Argha - 2026-02-20 - When adding this sentence would overflow, flush current chunk
             if (currentChunk.Length > 0 &&
                 currentChunk.Length + sentence.Length + 1 > options.ChunkSize)
             {
@@ -193,7 +212,7 @@ public class DocumentProcessor : IDocumentProcessor
         return chunks;
     }
 
-    // Argha - 2026-02-20 - Paragraph-based chunking: each blank-line-separated block is one chunk 
+    // Argha - 2026-02-20 - Paragraph-based chunking: each blank-line-separated block is one chunk
     private static List<DocumentChunk> ChunkByParagraph(Guid documentId, string text)
     {
         var paragraphs = Regex.Split(text, @"\n\n|\r\n\r\n")
@@ -214,11 +233,56 @@ public class DocumentProcessor : IDocumentProcessor
         return chunks;
     }
 
+    // Argha - 2026-03-22 - #77 - Hierarchical chunking: splits at [Section: ...] markers; preserves section prefix on each output chunk
+    private static List<DocumentChunk> ChunkByHierarchical(Guid documentId, string text, ChunkingOptions options)
+    {
+        var chunks = new List<DocumentChunk>();
+
+        // Argha - 2026-03-22 - #77 - Split text at every line that starts with [Section:
+        var sectionPattern = new Regex(@"(?=^\[Section:)", RegexOptions.Multiline);
+        var sections = sectionPattern.Split(text)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToList();
+
+        var chunkIndex = 0;
+
+        foreach (var section in sections)
+        {
+            var lines = section.Split('\n');
+            var sectionHeader = lines[0].Trim(); // e.g. "[Section: Introduction]"
+            var sectionBody = string.Join("\n", lines.Skip(1)).Trim();
+
+            if (string.IsNullOrWhiteSpace(sectionBody))
+            {
+                // Argha - 2026-03-22 - #77 - Section with no body text: emit just the header as a single chunk
+                chunks.Add(CreateChunk(documentId, sectionHeader, chunkIndex++, 0, sectionHeader.Length));
+                continue;
+            }
+
+            // Argha - 2026-03-22 - #77 - Split the body using fixed chunking, then prepend the section header to each chunk
+            var bodyOptions = new ChunkingOptions
+            {
+                ChunkSize = options.ChunkSize,
+                ChunkOverlap = options.ChunkOverlap,
+                Strategy = ChunkingStrategy.Fixed
+            };
+
+            var bodyChunks = ChunkByFixed(documentId, sectionBody, bodyOptions);
+            foreach (var bodyChunk in bodyChunks)
+            {
+                var content = $"{sectionHeader}\n{bodyChunk.Content}";
+                chunks.Add(CreateChunk(documentId, content, chunkIndex++, 0, content.Length));
+            }
+        }
+
+        return chunks;
+    }
+
     private static DocumentChunk CreateChunk(
-        Guid documentId, 
-        string content, 
-        int index, 
-        int startPos, 
+        Guid documentId,
+        string content,
+        int index,
+        int startPos,
         int endPos)
     {
         return new DocumentChunk
@@ -239,7 +303,7 @@ public class DocumentProcessor : IDocumentProcessor
         // Try to break at a word boundary
         var startIndex = text.Length - overlapSize;
         var spaceIndex = text.IndexOf(' ', startIndex);
-        
+
         if (spaceIndex > startIndex && spaceIndex < text.Length - 10)
         {
             return text.Substring(spaceIndex + 1);
@@ -269,6 +333,12 @@ public class DocumentProcessor : IDocumentProcessor
         foreach (var page in pages)
         {
             textBuilder.AppendLine(page.Text);
+
+            // Argha - 2026-03-22 - #76 - Append any detected tables as Markdown after the page's regular text
+            var tableText = ExtractTablesFromPage(page);
+            if (!string.IsNullOrWhiteSpace(tableText))
+                textBuilder.AppendLine(tableText);
+
             textBuilder.AppendLine(); // Add paragraph break between pages
         }
 
@@ -280,6 +350,59 @@ public class DocumentProcessor : IDocumentProcessor
 
         _logger.LogInformation("PDF text layer empty; running OCR fallback via Tesseract");
         return await OcrPdfPagesAsync(pages, cancellationToken);
+    }
+
+    // Argha - 2026-03-22 - #76 - Detect table-like word clusters on a PDF page using Y/X position clustering
+    // Groups words by approximate Y row (within 3-unit tolerance), then renders as Markdown
+    private static string ExtractTablesFromPage(Page page)
+    {
+        var words = page.GetWords(NearestNeighbourWordExtractor.Instance).ToList();
+        if (words.Count < 4) return string.Empty;
+
+        // Argha - 2026-03-22 - #76 - Group words by Y coordinate (bottom of bounding box) within tolerance
+        const double RowTolerance = 3.0;
+        var rows = new SortedDictionary<double, List<(double X, string Text)>>(Comparer<double>.Create((a, b) =>
+        {
+            // Argha - 2026-03-22 - #76 - PDF Y axis is bottom-up; larger Y = higher on page; sort descending
+            return b.CompareTo(a);
+        }));
+
+        foreach (var word in words)
+        {
+            var y = word.BoundingBox.Bottom;
+            var x = word.BoundingBox.Left;
+
+            var existingKey = rows.Keys.FirstOrDefault(k => Math.Abs(k - y) <= RowTolerance, double.NaN);
+            if (!double.IsNaN(existingKey))
+            {
+                rows[existingKey].Add((x, word.Text));
+            }
+            else
+            {
+                rows[y] = new List<(double, string)> { (x, word.Text) };
+            }
+        }
+
+        // Argha - 2026-03-22 - #76 - Only consider it a table if we have at least 2 rows each with 2+ cells
+        var tableRows = rows.Values
+            .Where(r => r.Count >= 2)
+            .ToList();
+
+        if (tableRows.Count < 2) return string.Empty;
+
+        // Argha - 2026-03-22 - #76 - Render rows as Markdown table; first row = header
+        var sb = new StringBuilder();
+        var headerCells = tableRows[0].OrderBy(c => c.X).Select(c => c.Text).ToList();
+        sb.AppendLine("| " + string.Join(" | ", headerCells) + " |");
+        sb.AppendLine("| " + string.Join(" | ", headerCells.Select(_ => "---")) + " |");
+
+        foreach (var row in tableRows.Skip(1))
+        {
+            var cells = row.OrderBy(c => c.X).Select(c => c.Text).ToList();
+            sb.AppendLine("| " + string.Join(" | ", cells) + " |");
+        }
+
+        return sb.ToString();
     }
 
     // Argha - 2026-03-20 - #51 - Extracts embedded images from each page and runs OCR; concatenates results
@@ -331,13 +454,14 @@ public class DocumentProcessor : IDocumentProcessor
         return ocrBuilder.ToString();
     }
 
+    // Argha - 2026-03-22 - #76 - Detect heading paragraphs by style ID; prefix with [Section: ...]
     private string ExtractFromDocx(Stream fileStream)
     {
         var textBuilder = new StringBuilder();
 
         using var document = WordprocessingDocument.Open(fileStream, false);
         var body = document.MainDocumentPart?.Document?.Body;
-        
+
         if (body == null)
         {
             return string.Empty;
@@ -346,7 +470,15 @@ public class DocumentProcessor : IDocumentProcessor
         foreach (var paragraph in body.Elements<Paragraph>())
         {
             var text = paragraph.InnerText;
-            if (!string.IsNullOrWhiteSpace(text))
+            if (string.IsNullOrWhiteSpace(text)) continue;
+
+            // Argha - 2026-03-22 - #76 - Detect heading paragraphs by style ID; prefix with [Section: ...]
+            var styleId = paragraph.ParagraphProperties?.ParagraphStyleId?.Val?.Value ?? string.Empty;
+            if (styleId.Contains("Heading", StringComparison.OrdinalIgnoreCase))
+            {
+                textBuilder.AppendLine($"[Section: {text}]");
+            }
+            else
             {
                 textBuilder.AppendLine(text);
             }
@@ -359,6 +491,15 @@ public class DocumentProcessor : IDocumentProcessor
     {
         using var reader = new StreamReader(fileStream);
         return await reader.ReadToEndAsync(cancellationToken);
+    }
+
+    // Argha - 2026-03-22 - #81 - Delegates audio transcription to the injected service; throws NotSupportedException for Ollama
+    private async Task<string> TranscribeAudioAsync(Stream stream, string mimeType, CancellationToken cancellationToken)
+    {
+        if (!_audioTranscriptionService.IsSupported)
+            throw new NotSupportedException("Audio transcription requires an OpenAI or AzureOpenAI provider.");
+
+        return await _audioTranscriptionService.TranscribeAsync(stream, mimeType, cancellationToken);
     }
 
     // Argha - 2026-03-16 - #34 - Extract images from a document; dispatches to PDF or DOCX handler
