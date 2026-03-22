@@ -29,6 +29,18 @@ public class ApiKeyMiddlewareTests
         string? providedKey,
         string path = "/api/chat")
     {
+        var (status, body, _) = await InvokeWithContextAsync(config, providedKey, path: path, workspaceFromDb: null);
+        return (status, body);
+    }
+
+    // Argha - 2026-03-22 - #63 - Extended helper: optionally returns a workspace from DB lookup
+    // so tests can verify which workspace was resolved into the context
+    private static async Task<(int StatusCode, string Body, Workspace? ResolvedWorkspace)> InvokeWithContextAsync(
+        IConfiguration config,
+        string? providedKey,
+        string path = "/api/chat",
+        Workspace? workspaceFromDb = null)
+    {
         var context = new DefaultHttpContext();
         context.Response.Body = new MemoryStream();
         context.Request.Path = path;
@@ -39,10 +51,15 @@ public class ApiKeyMiddlewareTests
         // Argha - 2026-03-04 - #17 - Middleware now resolves IWorkspaceContext and IWorkspaceRepository
         // from RequestServices; supply mocked services so tests remain self-contained
         var workspaceContextMock = new Mock<IWorkspaceContext>();
+        Workspace? resolvedWorkspace = null;
+        workspaceContextMock
+            .SetupSet(c => c.Current = It.IsAny<Workspace>())
+            .Callback<Workspace>(ws => resolvedWorkspace = ws);
+
         var workspaceRepoMock = new Mock<IWorkspaceRepository>();
         workspaceRepoMock
             .Setup(r => r.GetByApiKeyHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Workspace?)null);
+            .ReturnsAsync(workspaceFromDb);
         workspaceRepoMock
             .Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Workspace?)null); // triggers CreateFallbackWorkspace in middleware
@@ -64,7 +81,7 @@ public class ApiKeyMiddlewareTests
         context.Response.Body.Seek(0, SeekOrigin.Begin);
         var body = await new StreamReader(context.Response.Body).ReadToEndAsync();
 
-        return (context.Response.StatusCode, body);
+        return (context.Response.StatusCode, body, resolvedWorkspace);
     }
 
     [Fact]
@@ -125,5 +142,32 @@ public class ApiKeyMiddlewareTests
         var json = JsonSerializer.Deserialize<JsonElement>(body);
         json.GetProperty("error").GetString().Should().Be("Unauthorized");
         json.GetProperty("message").GetString().Should().Contain("X-Api-Key");
+    }
+
+    // Argha - 2026-03-22 - #63 - Regression test: workspace-specific keys must be honoured even when
+    // ApiAuth:ApiKey is NOT configured (previously the dev-mode bypass ignored all X-Api-Key headers,
+    // causing every request to resolve to the default workspace regardless of which workspace key was sent)
+    [Fact]
+    public async Task NoGlobalKeyConfigured_WorkspaceKeyStillResolvesCorrectWorkspace()
+    {
+        var targetWorkspace = new Workspace
+        {
+            Id = Guid.NewGuid(),
+            Name = "Target",
+            HashedApiKey = "irrelevant-hash",
+            CollectionName = "ws_target",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        var config = BuildConfig(string.Empty); // no global key = previously broken dev-mode bypass
+        var (status, _, resolved) = await InvokeWithContextAsync(
+            config,
+            providedKey: "workspace-specific-key",
+            workspaceFromDb: targetWorkspace);
+
+        status.Should().Be(200);
+        resolved.Should().NotBeNull();
+        resolved!.Id.Should().Be(targetWorkspace.Id);
+        resolved.CollectionName.Should().Be("ws_target");
     }
 }
