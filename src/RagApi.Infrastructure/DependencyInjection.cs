@@ -131,6 +131,11 @@ public static class DependencyInjection
         services.AddScoped<ConversationExportService>();
         // Argha - 2026-03-04 - #17 - Workspace service for workspace lifecycle management
         services.AddScoped<WorkspaceService>();
+        // Argha - 2026-03-22 - #65 - Agentic RAG: tools + orchestration service
+        services.Configure<RagApi.Application.Models.AgentConfiguration>(
+            configuration.GetSection(RagApi.Application.Models.AgentConfiguration.SectionName));
+        services.AddScoped<RagApi.Application.Services.AgentTools>();
+        services.AddScoped<RagApi.Application.Services.AgentService>();
 
         // Argha - 2026-03-02 - #6 - PostgreSQL health check replaces SqliteHealthCheck
         var healthChecks = services.AddHealthChecks()

@@ -8,8 +8,8 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 [![Deploy](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml/badge.svg)](https://github.com/Argha713/dotnet-rag-api/actions/workflows/deploy.yml)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat&logo=dotnet)
 ![C#](https://img.shields.io/badge/C%23-12-239120?style=flat&logo=csharp)
-![Tests](https://img.shields.io/badge/tests-335%20passing-brightgreen)
-![Phase](https://img.shields.io/badge/phase-14%20complete%20✅-brightgreen)
+![Tests](https://img.shields.io/badge/tests-366%20passing-brightgreen)
+![Phase](https://img.shields.io/badge/phase-15%20complete%20✅-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ---
@@ -69,6 +69,13 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 - **Import flow** — Paste an existing API key to link a workspace to this browser session (validates via `GET /api/documents`, resolves ID via `GET /api/workspaces/current`)
 - **Dynamic key injection** — `WorkspaceKeyHandler` DelegatingHandler replaces the static `X-Api-Key` header on every outgoing request
 
+### Agentic RAG ✅
+- **ReAct loop** — Agent plans retrieval, executes tools, observes results, and iterates (configurable max iterations, default 5)
+- **4 built-in tools** — `search_documents` (vector search), `get_document_summary` (chunk + summarise), `compare_chunks` (LLM comparison), `answer_directly` (loop termination)
+- **Full reasoning trace** — Every `POST /api/agent/query` response includes the complete step-by-step reasoning chain (thought → tool call → tool result → answer)
+- **SSE streaming** — `POST /api/agent/stream` emits each reasoning step live as Server-Sent Events so clients see the agent think in real time
+- **Kill switch** — `Agent:Enabled = false` returns `503 Service Unavailable` instantly; `Agent:MaxIterations` controls depth vs. cost tradeoff
+
 ### Security & Reliability
 - **API key authentication** — Protect all endpoints via `X-Api-Key` header; resolves workspace from DB hash lookup
 - **Rate limiting** — Configurable fixed-window limiter keyed by IP; health check always exempt
@@ -87,7 +94,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) API** built with **.NE
 - **GitHub Actions CI/CD** — Automated test, build, and deploy pipeline
 - **Azure deployment** — Container Apps (scales to zero) + Static Web Apps (free tier)
 - **Dark Orbital UI ✅** — Syne + DM Sans fonts, `#060608` background, teal/cyan glowing 3D orb with mouse-tracking parallax, vertical icon sidebar, quick-action hero cards
-- **335 unit tests** — xUnit + Moq + FluentAssertions across all layers
+- **366 unit tests** — xUnit + Moq + FluentAssertions across all layers
 
 ---
 
@@ -301,7 +308,7 @@ Cors__AllowedOrigins__0=https://your-frontend.azurestaticapps.net
 | **Frontend** | Blazor WebAssembly (.NET 8) — Inter design system, indigo theme |
 | **Hosting** | Azure Container Apps + Azure Static Web Apps |
 | **CI/CD** | GitHub Actions → GHCR → Azure |
-| **Testing** | xUnit, Moq, FluentAssertions (328 tests) |
+| **Testing** | xUnit, Moq, FluentAssertions (366 tests) |
 | **API Docs** | Swagger / OpenAPI |
 
 ---
@@ -317,7 +324,7 @@ dotnet-rag-api/
 │   ├── RagApi.Domain/           # Core entities
 │   └── RagApi.Infrastructure/   # Qdrant, OpenAI, Azure, EF Core
 ├── tests/
-│   └── RagApi.Tests/            # 328 unit tests
+│   └── RagApi.Tests/            # 366 unit tests
 ├── .github/workflows/           # CI, Deploy API, Deploy UI
 ├── docker-compose.yml           # Local Qdrant + Ollama + PostgreSQL
 ├── Dockerfile                   # Production container image
