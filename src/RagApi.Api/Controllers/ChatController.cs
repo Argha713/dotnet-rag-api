@@ -148,7 +148,6 @@ public class ChatController : ControllerBase
     /// - "token": one per LLM output token
     /// - "done": signals end of stream
     /// </remarks>
-    // Argha - 2026-03-22 - #85 - SSE endpoint not logged: no single terminal response object to measure latency/sources
     // Argha - 2026-02-19 - SSE streaming endpoint for Phase 2.1
     [HttpPost("stream")]
     public async Task StreamChat([FromBody] ChatRequest request, CancellationToken cancellationToken)
@@ -197,17 +196,27 @@ public class ChatController : ControllerBase
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
 
-        // Argha - 2026-02-19 - Accumulate tokens to persist full answer to session after streaming 
+        // Argha - 2026-02-19 - Accumulate tokens to persist full answer to session after streaming
         var answerBuilder = request.SessionId.HasValue ? new StringBuilder() : null;
+        // Argha - 2026-03-23 - #98 - Track latency/model/sources from stream events so SSE chats appear in analytics
+        var sw = Stopwatch.StartNew();
+        string? streamModel = null;
+        var streamSourceCount = 0;
 
         try
         {
             await foreach (var streamEvent in _ragService.ChatStreamAsync(
-                // Argha - 2026-02-19 - Pass tags filter through to streaming pipeline 
-                // Argha - 2026-02-20 - Pass per-request hybrid search override 
-                // Argha - 2026-02-20 - Pass per-request MMR re-ranking override 
+                // Argha - 2026-02-19 - Pass tags filter through to streaming pipeline
+                // Argha - 2026-02-20 - Pass per-request hybrid search override
+                // Argha - 2026-02-20 - Pass per-request MMR re-ranking override
                 request.Query, history, request.TopK, request.DocumentId, request.Tags, request.UseHybridSearch, request.UseReRanking, cancellationToken))
             {
+                // Argha - 2026-03-23 - #98 - "sources" event carries model name and citation count; capture for analytics log
+                if (streamEvent.Type == "sources")
+                {
+                    streamModel = streamEvent.Model;
+                    streamSourceCount = streamEvent.Sources?.Count ?? 0;
+                }
                 if (streamEvent.Type == "token")
                     answerBuilder?.Append(streamEvent.Content);
 
@@ -219,12 +228,23 @@ public class ChatController : ControllerBase
             await Response.WriteAsync("data: {\"type\":\"done\"}\n\n", cancellationToken);
             await Response.Body.FlushAsync(cancellationToken);
 
-            // Argha - 2026-02-19 - Persist user query + assembled answer to session 
+            // Argha - 2026-02-19 - Persist user query + assembled answer to session
             if (request.SessionId.HasValue && answerBuilder != null)
             {
                 await _conversationService.AppendMessagesAsync(
                     request.SessionId.Value, request.Query, answerBuilder.ToString(), cancellationToken);
             }
+
+            // Argha - 2026-03-23 - #98 - Log after stream completes; CancellationToken.None so a client disconnect cannot suppress the log
+            await _queryLogService.LogAsync(new QueryLogEntry(
+                _workspaceContext.Current.Id,
+                QueryType.Chat,
+                request.Query,
+                streamModel,
+                0,
+                sw.ElapsedMilliseconds,
+                streamSourceCount,
+                true), CancellationToken.None);
         }
         catch (OperationCanceledException)
         {
