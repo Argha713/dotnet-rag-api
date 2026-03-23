@@ -14,7 +14,7 @@ namespace RagApi.Tests.Unit.Infrastructure;
 
 public class OpenAiEmbeddingServiceTests
 {
-    private static OpenAiEmbeddingService CreateService(HttpMessageHandler handler, string apiKey = "test-key", string embeddingModel = "text-embedding-3-small")
+    private static OpenAiEmbeddingService CreateService(HttpMessageHandler handler, string apiKey = "test-key", string embeddingModel = "text-embedding-3-small", int batchSize = 100)
     {
         var httpClient = new HttpClient(handler);
         var config = Options.Create(new AiConfiguration
@@ -25,7 +25,8 @@ public class OpenAiEmbeddingServiceTests
                 BaseUrl = "https://api.openai.com/v1",
                 ChatModel = "gpt-4o-mini",
                 EmbeddingModel = embeddingModel,
-                EmbeddingDimension = 1536
+                EmbeddingDimension = 1536,
+                EmbeddingBatchSize = batchSize
             }
         });
         return new OpenAiEmbeddingService(httpClient, config, Mock.Of<ILogger<OpenAiEmbeddingService>>());
@@ -202,5 +203,96 @@ public class OpenAiEmbeddingServiceTests
 
         // Assert
         await act.Should().ThrowAsync<HttpRequestException>();
+    }
+
+    // Argha - 2026-03-23 - #96 - Batching tests: verify large inputs are split into multiple API calls
+
+    [Fact]
+    public async Task GenerateEmbeddingsAsync_InputExceedsBatchSize_MakesMultipleHttpCalls()
+    {
+        // Arrange — batch size 2, 5 inputs → 3 HTTP calls (2+2+1)
+        var callCount = 0;
+        var handlerMock = new Mock<HttpMessageHandler>();
+        handlerMock.Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(() =>
+            {
+                callCount++;
+                return MakeEmbeddingResponse(new float[] { (float)callCount });
+            });
+
+        var sut = CreateService(handlerMock.Object, batchSize: 2);
+        var texts = Enumerable.Range(0, 5).Select(i => $"text{i}").ToList();
+
+        // Act
+        await sut.GenerateEmbeddingsAsync(texts);
+
+        // Assert
+        callCount.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task GenerateEmbeddingsAsync_InputExceedsBatchSize_ReturnsAllEmbeddingsInOrder()
+    {
+        // Arrange — batch size 2, 4 inputs → 2 calls, each returning 2 embeddings
+        var batch1 = new[] { new float[] { 0.1f }, new float[] { 0.2f } };
+        var batch2 = new[] { new float[] { 0.3f }, new float[] { 0.4f } };
+        var responses = new Queue<HttpResponseMessage>(new[]
+        {
+            MakeEmbeddingResponse(batch1[0], batch1[1]),
+            MakeEmbeddingResponse(batch2[0], batch2[1])
+        });
+
+        var handlerMock = new Mock<HttpMessageHandler>();
+        handlerMock.Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(() => responses.Dequeue());
+
+        var sut = CreateService(handlerMock.Object, batchSize: 2);
+        var texts = Enumerable.Range(0, 4).Select(i => $"t{i}").ToList();
+
+        // Act
+        var result = await sut.GenerateEmbeddingsAsync(texts);
+
+        // Assert — all 4 embeddings present in original order
+        result.Should().HaveCount(4);
+        result[0].Should().BeEquivalentTo(batch1[0]);
+        result[1].Should().BeEquivalentTo(batch1[1]);
+        result[2].Should().BeEquivalentTo(batch2[0]);
+        result[3].Should().BeEquivalentTo(batch2[1]);
+    }
+
+    [Fact]
+    public async Task GenerateEmbeddingsAsync_InputFitsExactlyOneBatch_MakesOneHttpCall()
+    {
+        // Arrange — batch size 3, exactly 3 inputs → 1 call
+        var callCount = 0;
+        var handlerMock = new Mock<HttpMessageHandler>();
+        handlerMock.Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(() =>
+            {
+                callCount++;
+                return MakeEmbeddingResponse(new float[] { 1f }, new float[] { 2f }, new float[] { 3f });
+            });
+
+        var sut = CreateService(handlerMock.Object, batchSize: 3);
+        var texts = new List<string> { "a", "b", "c" };
+
+        // Act
+        var result = await sut.GenerateEmbeddingsAsync(texts);
+
+        // Assert
+        callCount.Should().Be(1);
+        result.Should().HaveCount(3);
     }
 }

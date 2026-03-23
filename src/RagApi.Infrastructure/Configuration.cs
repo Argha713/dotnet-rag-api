@@ -33,6 +33,8 @@ public class AzureOpenAiSettings
     public string EmbeddingDeployment { get; set; } = "text-embedding-ada-002";
     public string ChatDeployment { get; set; } = "gpt-4";
     public int EmbeddingDimension { get; set; } = 1536;
+    // Argha - 2026-03-23 - #96 - Azure OpenAI limit is 2048 inputs per request; 100 is a safe conservative batch size
+    public int EmbeddingBatchSize { get; set; } = 100;
 }
 
 // Argha - 2026-03-01 - OpenAI direct API settings (Phase 7)
@@ -43,6 +45,8 @@ public class OpenAiSettings
     public string ChatModel { get; set; } = "gpt-4o-mini";
     public string EmbeddingModel { get; set; } = "text-embedding-3-small";
     public int EmbeddingDimension { get; set; } = 1536;
+    // Argha - 2026-03-23 - #96 - OpenAI limit is 2048 inputs per request; 100 is a safe conservative batch size
+    public int EmbeddingBatchSize { get; set; } = 100;
 }
 
 // Argha - 2026-03-16 - #32 - Vision configuration for GPT-4o image description during document ingestion
