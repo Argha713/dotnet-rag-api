@@ -57,4 +57,14 @@ public class DocumentApiService
         return await _http.GetFromJsonAsync<List<string>>("/api/documents/supported-types", _jsonOptions, ct)
             ?? new List<string>();
     }
+
+    // Argha - 2026-03-23 - #100 - Ingest a URL (webpage, YouTube video, or direct file link) via Phase 12 endpoint
+    public async Task<DocumentDto> IngestUrlAsync(string url, List<string> tags, CancellationToken ct = default)
+    {
+        var body = new { url, tags };
+        var response = await _http.PostAsJsonAsync("/api/documents/ingest-url", body, _jsonOptions, ct);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<DocumentDto>(_jsonOptions, ct)
+            ?? throw new InvalidOperationException("Empty response from /api/documents/ingest-url");
+    }
 }
