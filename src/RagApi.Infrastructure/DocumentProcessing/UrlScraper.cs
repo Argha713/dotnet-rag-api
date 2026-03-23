@@ -158,18 +158,33 @@ public class UrlScraper : IUrlScraper
         }
     }
 
-    // Argha - 2026-03-23 - #102 - Fetch caption track URLs by parsing ytInitialPlayerResponse from the watch page HTML.
-    // This avoids hitting the InnerTube player API (/youtubei/v1/player) that requires po_token from browser JS.
-    // Returns null when the page loads successfully but the video has no caption tracks.
+    // Argha - 2026-03-23 - #102 - Two-strategy caption fetch:
+    // 1. Watch-page HTML scraping (browser headers + SOCS consent cookie)
+    // 2. InnerTube ANDROID client (bypasses po_token; used by yt-dlp for the same reason)
+    // Returns null only when both strategies find no caption tracks (e.g. video has no captions at all).
     private async Task<(string Text, string FileName)?> FetchYouTubeCaptionsFromPageAsync(
         string url, CancellationToken cancellationToken)
     {
         var videoId = ExtractYouTubeVideoId(url);
+
+        // Argha - 2026-03-23 - #102 - Strategy 1: parse ytInitialPlayerResponse from the watch page HTML
+        var result = await TryFetchCaptionsFromWatchPageAsync(videoId, url, cancellationToken);
+        if (result.HasValue) return result;
+
+        // Argha - 2026-03-23 - #102 - Strategy 2: InnerTube ANDROID client — YouTube doesn't enforce po_token
+        // on the ANDROID client type, so requests from server IPs succeed where the WEB client fails
+        _logger.LogInformation("Watch-page scraping yielded no captions for {Url}; trying InnerTube ANDROID client", url);
+        return await TryFetchCaptionsViaInnerTubeAsync(videoId, url, cancellationToken);
+    }
+
+    // Argha - 2026-03-23 - #102 - Strategy 1: fetch watch page with browser headers + SOCS consent cookie,
+    // extract ytInitialPlayerResponse JSON blob, parse captionTracks
+    private async Task<(string Text, string FileName)?> TryFetchCaptionsFromWatchPageAsync(
+        string videoId, string url, CancellationToken cancellationToken)
+    {
         var watchUrl = $"https://www.youtube.com/watch?v={videoId}";
 
-        // Argha - 2026-03-23 - #102 - Browser-like headers are required; YouTube returns a consent/bot page without them.
-        // SOCS=CAI bypasses the GDPR cookie consent gate that YouTube shows to non-browser requests from server IPs.
-        // User-Agent is set ONLY here (not in HttpClient.DefaultRequestHeaders) to avoid sending a double User-Agent header.
+        // Argha - 2026-03-23 - #102 - Browser-like headers required; SOCS=CAI bypasses GDPR consent gate on server IPs
         using var request = new HttpRequestMessage(HttpMethod.Get, watchUrl);
         request.Headers.TryAddWithoutValidation("User-Agent",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
@@ -181,29 +196,79 @@ public class UrlScraper : IUrlScraper
         response.EnsureSuccessStatusCode();
         var html = await response.Content.ReadAsStringAsync(cancellationToken);
 
-        // Argha - 2026-03-23 - #102 - Extract ytInitialPlayerResponse JSON blob embedded in the page
+        _logger.LogInformation("Watch page for {VideoId}: {Length} chars", videoId, html.Length);
+
         var playerResponseJson = ExtractYtInitialPlayerResponse(html);
         if (playerResponseJson == null)
         {
-            _logger.LogDebug("ytInitialPlayerResponse not found in watch page for {Url}", url);
+            _logger.LogWarning("ytInitialPlayerResponse not found in watch page for {VideoId} (page may be consent/error page)", videoId);
             return null;
         }
 
+        return await ParseCaptionTracksFromPlayerResponse(playerResponseJson, videoId, url, "watch-page", cancellationToken);
+    }
+
+    // Argha - 2026-03-23 - #102 - Strategy 2: call InnerTube /youtubei/v1/player with ANDROID client context.
+    // The ANDROID client type is exempt from po_token enforcement (as of 2025), making it reliable from server IPs.
+    private async Task<(string Text, string FileName)?> TryFetchCaptionsViaInnerTubeAsync(
+        string videoId, string url, CancellationToken cancellationToken)
+    {
+        const string innerTubeUrl = "https://www.youtube.com/youtubei/v1/player";
+        var body = new
+        {
+            videoId,
+            context = new
+            {
+                client = new
+                {
+                    clientName = "ANDROID",
+                    clientVersion = "18.11.34",
+                    androidSdkVersion = 30,
+                    userAgent = "com.google.android.youtube/18.11.34(Linux; U; Android 11) gzip"
+                }
+            }
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, innerTubeUrl);
+        request.Headers.TryAddWithoutValidation("User-Agent", "com.google.android.youtube/18.11.34(Linux; U; Android 11) gzip");
+        request.Headers.TryAddWithoutValidation("X-YouTube-Client-Name", "3");
+        request.Headers.TryAddWithoutValidation("X-YouTube-Client-Version", "18.11.34");
+        request.Content = new StringContent(
+            JsonSerializer.Serialize(body),
+            System.Text.Encoding.UTF8,
+            "application/json");
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        _logger.LogInformation("InnerTube ANDROID response for {VideoId}: {Length} chars", videoId, json.Length);
+
+        return await ParseCaptionTracksFromPlayerResponse(json, videoId, url, "InnerTube-ANDROID", cancellationToken);
+    }
+
+    // Argha - 2026-03-23 - #102 - Shared parser: extracts captionTracks from any ytInitialPlayerResponse-shaped JSON
+    // (same structure returned by watch-page HTML scraping and InnerTube API)
+    private async Task<(string Text, string FileName)?> ParseCaptionTracksFromPlayerResponse(
+        string playerResponseJson, string videoId, string url, string source, CancellationToken cancellationToken)
+    {
         using var doc = JsonDocument.Parse(playerResponseJson);
         var root = doc.RootElement;
 
-        // Argha - 2026-03-23 - #102 - Navigate: videoDetails.title for filename
+        // Argha - 2026-03-23 - #102 - Log playabilityStatus for diagnostics
+        if (root.TryGetProperty("playabilityStatus", out var ps) && ps.TryGetProperty("status", out var status))
+            _logger.LogInformation("playabilityStatus.status={Status} for {VideoId} via {Source}", status.GetString(), videoId, source);
+
         var title = root.TryGetProperty("videoDetails", out var vd) && vd.TryGetProperty("title", out var t)
             ? t.GetString() ?? videoId
             : videoId;
 
-        // Argha - 2026-03-23 - #102 - Navigate: captions.playerCaptionsTracklistRenderer.captionTracks[]
         if (!root.TryGetProperty("captions", out var captions) ||
             !captions.TryGetProperty("playerCaptionsTracklistRenderer", out var tracklistRenderer) ||
             !tracklistRenderer.TryGetProperty("captionTracks", out var captionTracks) ||
             captionTracks.GetArrayLength() == 0)
         {
-            _logger.LogDebug("No captionTracks found in ytInitialPlayerResponse for {Url}", url);
+            _logger.LogWarning("No captionTracks in player response for {VideoId} via {Source}", videoId, source);
             return null;
         }
 
@@ -224,29 +289,41 @@ public class UrlScraper : IUrlScraper
         }
 
         if (string.IsNullOrEmpty(captionBaseUrl))
+        {
+            _logger.LogWarning("captionTracks present but all baseUrl values are empty for {VideoId}", videoId);
             return null;
+        }
 
-        // Argha - 2026-03-23 - #102 - Download caption XML and parse <text> elements
         var captionXml = await _httpClient.GetStringAsync(captionBaseUrl, cancellationToken);
         var text = ParseCaptionXml(captionXml);
 
         if (string.IsNullOrWhiteSpace(text))
+        {
+            _logger.LogWarning("Caption XML downloaded but contained no text for {VideoId}", videoId);
             return null;
+        }
 
+        _logger.LogInformation("Captions extracted via {Source} for {VideoId}: {CharCount} chars", source, videoId, text.Length);
         var fileName = $"{SanitizeFileName(title)}.txt";
         return (text, fileName);
     }
 
-    // Argha - 2026-03-23 - #102 - Locate the ytInitialPlayerResponse = {...}; assignment in the watch page script
-    // and extract the JSON value using a balanced-brace walk (avoids fragile substring/regex on deeply nested JSON)
+    // Argha - 2026-03-23 - #102 - Locate the ytInitialPlayerResponse = {...}; assignment in the watch page script.
+    // Skips optional whitespace after the = sign. Also handles the form without leading 'var'.
     private static string? ExtractYtInitialPlayerResponse(string html)
     {
-        const string marker = "var ytInitialPlayerResponse = ";
-        var start = html.IndexOf(marker, StringComparison.Ordinal);
+        // Argha - 2026-03-23 - #102 - Try both 'var ytInitialPlayerResponse = ' and bare 'ytInitialPlayerResponse = '
+        var start = -1;
+        foreach (var marker in new[] { "var ytInitialPlayerResponse = ", "ytInitialPlayerResponse = " })
+        {
+            var idx = html.IndexOf(marker, StringComparison.Ordinal);
+            if (idx >= 0) { start = idx + marker.Length; break; }
+        }
         if (start < 0) return null;
-        start += marker.Length;
 
-        if (start >= html.Length || html[start] != '{') return null;
+        // Argha - 2026-03-23 - #102 - Skip any whitespace between = and {
+        while (start < html.Length && html[start] != '{') start++;
+        if (start >= html.Length) return null;
 
         var depth = 0;
         var inString = false;
