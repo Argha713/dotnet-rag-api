@@ -36,7 +36,9 @@ public class ChatApiService
     }
 
     // Argha - 2026-02-21 - Consume SSE stream from /api/chat/stream; parse data: lines and invoke callback per event
-    public async Task ChatStreamAsync(ChatRequest request, Action<UiStreamEvent> onEvent, CancellationToken ct = default)
+    // Argha - 2026-03-23 - Callback is Func<,Task> so callers can await InvokeAsync(StateHasChanged) and give
+    //   Blazor a real render cycle per token — sync Action caused batched re-renders making it appear non-streaming
+    public async Task ChatStreamAsync(ChatRequest request, Func<UiStreamEvent, Task> onEvent, CancellationToken ct = default)
     {
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/api/chat/stream")
         {
@@ -61,7 +63,7 @@ public class ChatApiService
             var evt = JsonSerializer.Deserialize<UiStreamEvent>(data, _jsonOptions);
             if (evt != null)
             {
-                onEvent(evt);
+                await onEvent(evt);
                 if (evt.Type == "done") break;
             }
         }

@@ -95,7 +95,7 @@ public class ChatApiServiceTests
         var (sut, _) = BuildSut(HttpStatusCode.OK, sseBody, "text/event-stream");
 
         var events = new List<UiStreamEvent>();
-        await sut.ChatStreamAsync(new ChatRequest { Query = "hi" }, evt => events.Add(evt));
+        await sut.ChatStreamAsync(new ChatRequest { Query = "hi" }, evt => { events.Add(evt); return Task.CompletedTask; });
 
         events.Should().HaveCount(3);
         events[0].Type.Should().Be("sources");
