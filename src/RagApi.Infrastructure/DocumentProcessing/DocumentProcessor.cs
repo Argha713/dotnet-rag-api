@@ -489,7 +489,10 @@ public class DocumentProcessor : IDocumentProcessor
 
     private static async Task<string> ExtractFromTextAsync(Stream fileStream, CancellationToken cancellationToken)
     {
-        using var reader = new StreamReader(fileStream);
+        // Argha - 2026-03-23 - #106 - leaveOpen: true so the caller (UploadDocumentAsync) retains ownership
+        // of the stream. Default leaveOpen: false disposes the MemoryStream on StreamReader disposal,
+        // causing ObjectDisposedException when the vision pipeline later tries to rewind via Position = 0.
+        using var reader = new StreamReader(fileStream, leaveOpen: true);
         return await reader.ReadToEndAsync(cancellationToken);
     }
 
