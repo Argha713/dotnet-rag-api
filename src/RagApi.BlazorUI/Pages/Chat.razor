@@ -1,4 +1,6 @@
+@* Argha - 2026-03-23 - #108 - Markdown rendering: Markdig converts AI response to HTML; rendered as MarkupString *@
 @* Argha - 2026-03-03 - #13 - Chat page redesign: modern sidebar, indigo bubbles, improved input & sources *@
+@using Markdig
 @* Argha - 2026-03-04 - #17 - Scoped conversation list per workspace; reload on workspace switch *@
 @* Argha - 2026-02-21 - Original chat page: sidebar with conversation list + streaming message panel *@
 @* Argha - 2026-03-07 - #20 - Workspace gate + no-docs banner; textarea disabled when no documents *@
@@ -169,7 +171,8 @@ else
                             }
                             else
                             {
-                                @msg.Content
+                                @* Argha - 2026-03-23 - #108 - Render as MarkupString so Markdown headings, bold, lists display correctly *@
+                                @((MarkupString)RenderMarkdown(msg.Content))
                                 @if (msg.IsStreaming)
                                 {
                                     <span style="display:inline-block;width:2px;height:1em;background:var(--primary-mid);margin-left:2px;vertical-align:text-bottom;animation:dot-bounce 0.8s ease-in-out infinite;"></span>
@@ -560,4 +563,13 @@ else
         public List<SourceCitationDto>? Sources { get; set; }
         public string? Model { get; set; }
     }
+
+    // Argha - 2026-03-23 - #108 - Convert Markdown to HTML for assistant messages;
+    // pipeline includes tables, task lists, and auto-links for common AI output patterns
+    private static readonly MarkdownPipeline _markdownPipeline = new MarkdownPipelineBuilder()
+        .UseAdvancedExtensions()
+        .Build();
+
+    private static string RenderMarkdown(string? markdown) =>
+        string.IsNullOrEmpty(markdown) ? string.Empty : Markdown.ToHtml(markdown, _markdownPipeline);
 }

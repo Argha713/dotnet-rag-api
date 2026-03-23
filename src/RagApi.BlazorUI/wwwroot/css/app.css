@@ -511,7 +511,6 @@ html, body {
 
 .bubble {
     padding: var(--space-3) var(--space-4);
-    white-space: pre-wrap;
     word-break: break-word;
     line-height: 1.6;
     font-size: var(--text-md);
@@ -521,6 +520,8 @@ html, body {
     color: var(--text-inverse);
     border-radius: var(--radius-lg) var(--radius-lg) var(--radius-xs) var(--radius-lg);
     box-shadow: 0 2px 12px rgba(0, 217, 192, 0.20);
+    /* Argha - 2026-03-23 - #108 - User messages are plain text; keep newlines */
+    white-space: pre-wrap;
 }
 .message.assistant .bubble {
     background: var(--bg-surface);
@@ -528,6 +529,72 @@ html, body {
     border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-xs);
     box-shadow: var(--shadow-sm);
     color: var(--text-primary);
+}
+
+/* Argha - 2026-03-23 - #108 - Markdown elements rendered inside assistant bubbles */
+.message.assistant .bubble p { margin: 0 0 0.6em; }
+.message.assistant .bubble p:last-child { margin-bottom: 0; }
+.message.assistant .bubble h1,
+.message.assistant .bubble h2,
+.message.assistant .bubble h3,
+.message.assistant .bubble h4 {
+    font-weight: 600;
+    margin: 0.9em 0 0.4em;
+    color: var(--text-primary);
+    line-height: 1.3;
+}
+.message.assistant .bubble h1 { font-size: 1.2em; }
+.message.assistant .bubble h2 { font-size: 1.1em; }
+.message.assistant .bubble h3 { font-size: 1em; }
+.message.assistant .bubble ul,
+.message.assistant .bubble ol {
+    margin: 0.4em 0 0.6em 1.4em;
+    padding: 0;
+}
+.message.assistant .bubble li { margin-bottom: 0.2em; }
+.message.assistant .bubble strong { font-weight: 600; color: var(--text-primary); }
+.message.assistant .bubble em { font-style: italic; }
+.message.assistant .bubble code {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1em 0.35em;
+    font-size: 0.88em;
+    font-family: monospace;
+}
+.message.assistant .bubble pre {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    overflow-x: auto;
+    margin: 0.5em 0;
+}
+.message.assistant .bubble pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.86em;
+}
+.message.assistant .bubble table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.6em 0;
+    font-size: 0.9em;
+}
+.message.assistant .bubble th,
+.message.assistant .bubble td {
+    border: 1px solid var(--border);
+    padding: 0.4em 0.7em;
+    text-align: left;
+}
+.message.assistant .bubble th { background: var(--bg-input); font-weight: 600; }
+.message.assistant .bubble blockquote {
+    border-left: 3px solid var(--primary-mid);
+    margin: 0.5em 0;
+    padding: 0.3em 0.8em;
+    color: var(--text-secondary);
+    font-style: italic;
 }
 
 /* Typing indicator */
