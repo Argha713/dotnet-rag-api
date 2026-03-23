@@ -464,7 +464,7 @@ else
         {
             await ChatService.ChatStreamAsync(
                 new ChatRequest { Query = query, TopK = 5, SessionId = _activeConvId },
-                evt =>
+                async evt =>
                 {
                     if (evt.Type == "sources")
                     {
@@ -475,7 +475,9 @@ else
                     {
                         assistantMsg.Content += evt.Content;
                     }
-                    StateHasChanged();
+                    // Argha - 2026-03-23 - Await InvokeAsync so Blazor gets a real render cycle per token;
+                    //   plain StateHasChanged() was batched when multiple tokens landed in the same buffer read
+                    await InvokeAsync(StateHasChanged);
                 },
                 _streamCts.Token);
         }
