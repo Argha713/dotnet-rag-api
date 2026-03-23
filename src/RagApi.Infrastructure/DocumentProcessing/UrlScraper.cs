@@ -35,8 +35,8 @@ public class UrlScraper : IUrlScraper
         _options = options.Value;
         _logger = logger;
 
-        // Argha - 2026-03-22 - #74 - Apply user-agent and timeout from config
-        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(_options.UserAgent);
+        // Argha - 2026-03-23 - #102 - Do NOT set User-Agent as a default header; set it per-request so
+        // FetchYouTubeCaptionsFromPageAsync can send a clean browser User-Agent without duplication
         _httpClient.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
     }
 
@@ -63,7 +63,10 @@ public class UrlScraper : IUrlScraper
     // Argha - 2026-03-22 - #74 - Fetches and strips HTML content to plain text via AngleSharp
     private async Task<(string Text, string FileName)> ScrapeHtmlAsync(string url, CancellationToken cancellationToken)
     {
-        using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        // Argha - 2026-03-23 - #102 - Set User-Agent per-request (not as default header) so YouTube requests can use a different UA
+        using var htmlRequest = new HttpRequestMessage(HttpMethod.Get, url);
+        htmlRequest.Headers.TryAddWithoutValidation("User-Agent", _options.UserAgent);
+        using var response = await _httpClient.SendAsync(htmlRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         // Argha - 2026-03-22 - #74 - Guard against unexpectedly large responses
@@ -164,12 +167,15 @@ public class UrlScraper : IUrlScraper
         var videoId = ExtractYouTubeVideoId(url);
         var watchUrl = $"https://www.youtube.com/watch?v={videoId}";
 
-        // Argha - 2026-03-23 - #102 - Browser-like headers are required; YouTube returns an empty/consent page without them
+        // Argha - 2026-03-23 - #102 - Browser-like headers are required; YouTube returns a consent/bot page without them.
+        // SOCS=CAI bypasses the GDPR cookie consent gate that YouTube shows to non-browser requests from server IPs.
+        // User-Agent is set ONLY here (not in HttpClient.DefaultRequestHeaders) to avoid sending a double User-Agent header.
         using var request = new HttpRequestMessage(HttpMethod.Get, watchUrl);
         request.Headers.TryAddWithoutValidation("User-Agent",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
         request.Headers.TryAddWithoutValidation("Accept-Language", "en-US,en;q=0.9");
         request.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+        request.Headers.TryAddWithoutValidation("Cookie", "SOCS=CAI; CONSENT=YES+cb");
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
