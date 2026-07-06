@@ -70,6 +70,7 @@ secrets.json
 # Claude Code
 .claude/
 CLAUDE.md
+.superpowers/
 
 # Git worktrees
 .worktrees/

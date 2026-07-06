@@ -288,4 +288,59 @@ public class QdrantVectorStoreResilientTests
             It.IsAny<string>(), It.IsAny<VectorParams>(), It.IsAny<CancellationToken>()), Times.Once());
         results.Should().BeEmpty();
     }
+
+    // ── KeywordSearchAsync stopword stripping (#112) ─────────────────────────
+
+    // Argha - 2026-07-06 - #112 - Qdrant's full-text Match.Text requires every tokenized word to be
+    // present; a raw natural-language question full of stopwords silently matched nothing. These tests
+    // guard the fix that strips stopwords before building the match condition.
+
+    [Fact]
+    public async Task KeywordSearchAsync_StopwordHeavyQuestion_StripsStopwordsFromMatchText()
+    {
+        Filter? capturedFilter = null;
+        _mockClient.Setup(c => c.ScrollAsync(
+                It.IsAny<string>(), It.IsAny<Filter?>(), It.IsAny<uint>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Callback<string, Filter?, uint, bool, CancellationToken>((_, filter, _, _, _) => capturedFilter = filter)
+            .ReturnsAsync(new ScrollResponse());
+
+        await _sut.KeywordSearchAsync("documents", "What is the document number and who approved it?", topK: 5);
+
+        var matchText = capturedFilter!.Must.Select(c => c.Field.Match.Text).First();
+        matchText.Should().NotContain("What");
+        matchText.Should().NotContain("who");
+        matchText.Should().Contain("document");
+        matchText.Should().Contain("number");
+        matchText.Should().Contain("approved");
+    }
+
+    [Fact]
+    public async Task KeywordSearchAsync_AllStopwordQuery_FallsBackToOriginalQuery()
+    {
+        Filter? capturedFilter = null;
+        _mockClient.Setup(c => c.ScrollAsync(
+                It.IsAny<string>(), It.IsAny<Filter?>(), It.IsAny<uint>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Callback<string, Filter?, uint, bool, CancellationToken>((_, filter, _, _, _) => capturedFilter = filter)
+            .ReturnsAsync(new ScrollResponse());
+
+        await _sut.KeywordSearchAsync("documents", "what is it", topK: 5);
+
+        var matchText = capturedFilter!.Must.Select(c => c.Field.Match.Text).First();
+        matchText.Should().Be("what is it");
+    }
+
+    [Fact]
+    public async Task KeywordSearchAsync_KeywordOnlyQuery_Unaffected()
+    {
+        Filter? capturedFilter = null;
+        _mockClient.Setup(c => c.ScrollAsync(
+                It.IsAny<string>(), It.IsAny<Filter?>(), It.IsAny<uint>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Callback<string, Filter?, uint, bool, CancellationToken>((_, filter, _, _, _) => capturedFilter = filter)
+            .ReturnsAsync(new ScrollResponse());
+
+        await _sut.KeywordSearchAsync("documents", "invoice total amount", topK: 5);
+
+        var matchText = capturedFilter!.Must.Select(c => c.Field.Match.Text).First();
+        matchText.Should().Be("invoice total amount");
+    }
 }

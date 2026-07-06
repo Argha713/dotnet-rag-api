@@ -29,6 +29,8 @@ When answering:
 2. If you quote from the context, use quotation marks
 3. Keep your answer concise but complete
 4. If multiple documents contain relevant information, synthesize them
+5. The ""Source"" label above each excerpt shows which uploaded file it came from — the file name itself is metadata, not document content. Never use a file name to answer questions about document numbers, IDs, dates, or other facts; use only facts explicitly stated in the excerpt text.
+6. If a field names a role or title rather than a person (e.g. ""Approved By: Director""), report that role/title as the answer — do not treat it as missing information.
 
 Context from documents:
 {0}
@@ -269,14 +271,33 @@ Remember: Only use information from the context above. Do not make up informatio
             candidates = FuseWithRrf(semanticTask.Result, keywordTask.Result, candidateCount);
         }
 
-        // Argha - 2026-02-20 - Apply MMR re-ranking if enabled 
+        // Argha - 2026-02-20 - Apply MMR re-ranking if enabled
+        var finalResults = candidates;
         if (useReRanking && candidates.Count > 0)
         {
             _logger.LogDebug("Applying MMR re-ranking with lambda={Lambda}", _searchOptions.MmrLambda);
-            return MmrReRanker.Rerank(candidates, queryEmbedding, topK, _searchOptions.MmrLambda);
+            finalResults = MmrReRanker.Rerank(candidates, queryEmbedding, topK, _searchOptions.MmrLambda);
         }
 
-        return candidates;
+        LogRetrievedChunks(query, finalResults);
+        return finalResults;
+    }
+
+    // Argha - 2026-07-06 - #110 - Per-chunk retrieval diagnostics: logs exactly which document/chunk/score
+    // won each slot and a content preview, so a wrong-answer report can be traced back to what the LLM
+    // actually saw without manually querying the vector store.
+    private void LogRetrievedChunks(string query, List<SearchResult> results)
+    {
+        for (int i = 0; i < results.Count; i++)
+        {
+            var r = results[i];
+            // Argha - 2026-07-06 - #110 - TruncateText passes null straight through for null input;
+            // guard before .Replace() so a chunk with no content (e.g. in tests) doesn't crash logging.
+            var preview = TruncateText(r.Content ?? string.Empty, 120).Replace('\n', ' ');
+            _logger.LogInformation(
+                "Retrieval[{Rank}] query=\"{Query}\" doc={FileName} chunkIndex={ChunkIndex} score={Score:F4} preview=\"{Preview}\"",
+                i + 1, query, r.FileName, r.ChunkIndex, r.Score, preview);
+        }
     }
 
     // Argha - 2026-02-20 - Reciprocal Rank Fusion: score = Σ 1/(60 + rank) across both lists 
@@ -323,7 +344,10 @@ Remember: Only use information from the context above. Do not make up informatio
         for (int i = 0; i < results.Count; i++)
         {
             var result = results[i];
-            contextBuilder.AppendLine($"[Source {i + 1}: {result.FileName}]");
+            // Argha - 2026-07-06 - #111 - Em-dash + quoted file name (not a colon-separated "Label: value"
+            // format) so this can't be visually confused with a real document field when the file name
+            // happens to start with digits that look like an ID.
+            contextBuilder.AppendLine($"[Source {i + 1} — uploaded file: \"{result.FileName}\"]");
             contextBuilder.AppendLine(result.Content);
             contextBuilder.AppendLine();
         }

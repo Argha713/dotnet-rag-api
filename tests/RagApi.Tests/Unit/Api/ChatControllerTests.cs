@@ -90,7 +90,9 @@ public class ChatControllerTests
         {
             new() { ChunkId = Guid.NewGuid(), DocumentId = Guid.NewGuid(), FileName = "doc.txt", Content = "relevant content", Score = 0.9, ChunkIndex = 0 }
         };
-        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<string>(), TestEmbedding, 5, null, null, It.IsAny<CancellationToken>()))
+        // Argha - 2026-07-06 - #112 - It.IsAny<int>() for topK, not a literal 5: ChatRequest.TopK's
+        // default changed to 10, and this test isn't asserting a specific topK value.
+        _vectorStoreMock.Setup(v => v.SearchAsync(It.IsAny<string>(), TestEmbedding, It.IsAny<int>(), null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(searchResults);
         _chatMock.Setup(c => c.GenerateResponseAsync(It.IsAny<string>(), It.IsAny<List<ChatMessage>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("Test answer");
