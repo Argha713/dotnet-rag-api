@@ -7,6 +7,7 @@ using UglyToad.PdfPig.DocumentLayoutAnalysis.WordExtractor;
 using RagApi.Application.Interfaces;
 using RagApi.Domain.Entities;
 using Microsoft.Extensions.Logging;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 // Argha - 2026-03-20 - #51 - IOcrService used for OCR fallback on scanned PDFs
@@ -384,11 +385,49 @@ public class DocumentProcessor : IDocumentProcessor
         }
 
         // Argha - 2026-03-22 - #76 - Only consider it a table if we have at least 2 rows each with 2+ cells
-        var tableRows = rows.Values
+        var candidateRows = rows.Values
             .Where(r => r.Count >= 2)
             .ToList();
 
+        if (candidateRows.Count < 2) return string.Empty;
+
+        // Argha - 2026-07-06 - #110 - Row count alone matches ordinary prose (every wrapped line of a
+        // paragraph or bullet is a "row" with 2+ words). A real table has a CONSISTENT cell count row to
+        // row; wrapped text varies wildly (a short line vs. a long wrapped bullet). Keep only rows sharing
+        // the most common cell count — this alone rejects almost all prose/bullet content.
+        var modalCellCount = candidateRows
+            .GroupBy(r => r.Count)
+            .OrderByDescending(g => g.Count())
+            .First().Key;
+
+        // Argha - 2026-07-06 - #110 - A row of 30 cells is never a real table column count — it's a long
+        // wrapped sentence that happens to match another wrapped line's word count. Real tables in
+        // business documents plausibly have up to ~10 columns; cap here to reject that coincidence.
+        const int MaxPlausibleColumnCount = 10;
+        if (modalCellCount > MaxPlausibleColumnCount) return string.Empty;
+
+        var tableRows = candidateRows.Where(r => r.Count == modalCellCount).ToList();
         if (tableRows.Count < 2) return string.Empty;
+
+        // Argha - 2026-07-06 - #110 - Also require genuine column alignment across those uniform rows: at
+        // least 2 distinct X positions must each recur across 2+ of them. Prose only has one recurring X
+        // (the left margin where each line starts) — a real table has several aligned columns of data.
+        const double ColumnTolerance = 5.0;
+        var distinctColumnPositions = new List<double>();
+        foreach (var row in tableRows)
+        {
+            foreach (var cell in row)
+            {
+                var alreadyKnown = distinctColumnPositions.Any(c => Math.Abs(c - cell.X) <= ColumnTolerance);
+                if (!alreadyKnown)
+                    distinctColumnPositions.Add(cell.X);
+            }
+        }
+
+        var alignedColumnCount = distinctColumnPositions.Count(column =>
+            tableRows.Count(row => row.Any(cell => Math.Abs(cell.X - column) <= ColumnTolerance)) >= 2);
+
+        if (alignedColumnCount < 2) return string.Empty;
 
         // Argha - 2026-03-22 - #76 - Render rows as Markdown table; first row = header
         var sb = new StringBuilder();
@@ -580,7 +619,24 @@ public class DocumentProcessor : IDocumentProcessor
             }
         }
 
-        return Task.FromResult(results);
+        return Task.FromResult(DeduplicateByContentHash(results));
+    }
+
+    // Argha - 2026-07-06 - #110 - Drop repeated occurrences of the same image bytes (e.g. a logo reused
+    // across every page) so vision captioning doesn't produce N near-identical chunks that flood retrieval
+    private static List<ExtractedImage> DeduplicateByContentHash(List<ExtractedImage> images)
+    {
+        var seenHashes = new HashSet<string>();
+        var deduped = new List<ExtractedImage>();
+
+        foreach (var image in images)
+        {
+            var hash = Convert.ToHexString(SHA256.HashData(image.Bytes));
+            if (seenHashes.Add(hash))
+                deduped.Add(image);
+        }
+
+        return deduped;
     }
 
     // Argha - 2026-03-16 - #34 - Read the first filter name from ImageDictionary; returns null when no filter key exists
@@ -646,7 +702,7 @@ public class DocumentProcessor : IDocumentProcessor
             imageIndex++;
         }
 
-        return Task.FromResult(results);
+        return Task.FromResult(DeduplicateByContentHash(results));
     }
 
     // Argha - 2026-03-16 - #35 - Dispatch dimension reading by MIME type; returns (null,null) for unrecognised formats

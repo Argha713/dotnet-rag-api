@@ -455,4 +455,112 @@ public class DocumentProcessorTests
         ocrMock.Verify(s => s.RecognizeTextAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()), Times.Never);
         result.Trim().Should().BeEmpty();
     }
+
+    // Argha - 2026-07-06 - #110 - ExtractTablesFromPage previously classified any page with 2+ multi-word
+    // lines as a table, duplicating ordinary prose as garbled pipe-delimited text. These tests guard the
+    // column-alignment fix: prose (only the left margin repeats across lines) must not emit a table block.
+
+    [Fact]
+    public async Task ExtractTextAsync_JustifiedParagraph_DoesNotEmitTableBlock()
+    {
+        var ocrMock = new Mock<IOcrService>();
+        var logger = new Mock<ILogger<DocumentProcessor>>();
+        var sut = new DocumentProcessor(logger.Object, ocrMock.Object, Mock.Of<IAudioTranscriptionService>());
+
+        var builder = new PdfDocumentBuilder();
+        var page = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        var font = builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica);
+
+        // Argha - 2026-07-06 - #110 - Four lines of ordinary prose. Each word is placed individually so
+        // X positions are exact (not dependent on font-metric string layout). Every line starts at the
+        // same left margin (X=50), but words 2-4 are deliberately staggered ≥10pt apart across lines so
+        // no column beyond the margin accidentally aligns within the 5pt tolerance.
+        page.AddText("This", 12, new UglyToad.PdfPig.Core.PdfPoint(50, 700), font);
+        page.AddText("normal", 12, new UglyToad.PdfPig.Core.PdfPoint(90, 700), font);
+        page.AddText("paragraph", 12, new UglyToad.PdfPig.Core.PdfPoint(150, 700), font);
+        page.AddText("text", 12, new UglyToad.PdfPig.Core.PdfPoint(210, 700), font);
+
+        page.AddText("Reviewed", 12, new UglyToad.PdfPig.Core.PdfPoint(50, 685), font);
+        page.AddText("documents", 12, new UglyToad.PdfPig.Core.PdfPoint(100, 685), font);
+        page.AddText("confidential", 12, new UglyToad.PdfPig.Core.PdfPoint(160, 685), font);
+        page.AddText("always", 12, new UglyToad.PdfPig.Core.PdfPoint(220, 685), font);
+
+        page.AddText("Employees", 12, new UglyToad.PdfPig.Core.PdfPoint(50, 670), font);
+        page.AddText("must", 12, new UglyToad.PdfPig.Core.PdfPoint(110, 670), font);
+        page.AddText("follow", 12, new UglyToad.PdfPig.Core.PdfPoint(170, 670), font);
+        page.AddText("guidelines", 12, new UglyToad.PdfPig.Core.PdfPoint(230, 670), font);
+
+        page.AddText("Access", 12, new UglyToad.PdfPig.Core.PdfPoint(50, 655), font);
+        page.AddText("granted", 12, new UglyToad.PdfPig.Core.PdfPoint(120, 655), font);
+        page.AddText("via", 12, new UglyToad.PdfPig.Core.PdfPoint(180, 655), font);
+        page.AddText("token", 12, new UglyToad.PdfPig.Core.PdfPoint(240, 655), font);
+
+        var pdfBytes = builder.Build();
+        using var stream = new MemoryStream(pdfBytes);
+
+        var text = await sut.ExtractTextAsync(stream, "application/pdf");
+
+        text.Should().NotContain("|");
+    }
+
+    [Fact]
+    public async Task ExtractTextAsync_GenuineTableGrid_StillEmitsTableBlock()
+    {
+        // Argha - 2026-07-06 - #110 - Regression guard for #76: a real 2-column x 3-row grid, with each
+        // column at a consistent X across every row, must still be detected and rendered as a table.
+        var ocrMock = new Mock<IOcrService>();
+        var logger = new Mock<ILogger<DocumentProcessor>>();
+        var sut = new DocumentProcessor(logger.Object, ocrMock.Object, Mock.Of<IAudioTranscriptionService>());
+
+        var builder = new PdfDocumentBuilder();
+        var page = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        var font = builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica);
+
+        page.AddText("Name", 12, new UglyToad.PdfPig.Core.PdfPoint(50, 700), font);
+        page.AddText("Age", 12, new UglyToad.PdfPig.Core.PdfPoint(200, 700), font);
+        page.AddText("Alice", 12, new UglyToad.PdfPig.Core.PdfPoint(50, 685), font);
+        page.AddText("30", 12, new UglyToad.PdfPig.Core.PdfPoint(200, 685), font);
+        page.AddText("Bob", 12, new UglyToad.PdfPig.Core.PdfPoint(50, 670), font);
+        page.AddText("25", 12, new UglyToad.PdfPig.Core.PdfPoint(200, 670), font);
+
+        var pdfBytes = builder.Build();
+        using var stream = new MemoryStream(pdfBytes);
+
+        var text = await sut.ExtractTextAsync(stream, "application/pdf");
+
+        text.Should().Contain("|");
+        text.Should().Contain("Alice");
+        text.Should().Contain("30");
+    }
+
+    // Argha - 2026-07-06 - #110 - ExtractImagesAsync previously returned every occurrence of a repeated
+    // image (e.g. a logo reused across pages), producing N near-identical vision captions that flooded
+    // retrieval. This guards the content-hash dedup fix.
+
+    [Fact]
+    public async Task ExtractImagesAsync_DocxWithDuplicateImageBytes_ReturnsOnlyOne()
+    {
+        var identicalPng = MakeFakePngHeader(100, 100);
+
+        using var ms = new MemoryStream();
+        using (var doc = WordprocessingDocument.Create(ms, WordprocessingDocumentType.Document))
+        {
+            var main = doc.AddMainDocumentPart();
+            main.Document = new Document(new Body(new Paragraph()));
+            foreach (var _ in new[] { 1, 2 })
+            {
+                var part = main.AddImagePart("image/png");
+                using var imgMs = new MemoryStream(identicalPng);
+                part.FeedData(imgMs);
+            }
+            doc.Save();
+        }
+
+        using var stream = new MemoryStream(ms.ToArray());
+        var result = await _sut.ExtractImagesAsync(
+            stream,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+
+        result.Should().HaveCount(1);
+    }
 }
