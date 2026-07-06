@@ -15,10 +15,13 @@ public class ChatRequest
     public string Query { get; set; } = string.Empty;
 
     /// <summary>
-    /// Number of document chunks to retrieve (default: 5)
+    /// Number of document chunks to retrieve (default: 10)
     /// </summary>
+    // Argha - 2026-07-06 - #112 - Raised from 5: with hybrid search, a single keyword-only match can tie
+    // in RRF score with several irrelevant semantic-only matches at the cutoff, risking exclusion at a
+    // small topK. A larger window gives correct-but-tied chunks more room to survive.
     [Range(1, 20)]
-    public int TopK { get; set; } = 5;
+    public int TopK { get; set; } = 10;
 
     /// <summary>
     /// Optional: Filter results to a specific document

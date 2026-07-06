@@ -466,7 +466,9 @@ else
         try
         {
             await ChatService.ChatStreamAsync(
-                new ChatRequest { Query = query, TopK = 5, SessionId = _activeConvId },
+                // Argha - 2026-07-06 - #112 - Raised from 5: hardcoded here overrides the server-side
+                // default, so bumping ChatRequest.TopK alone in the API had no effect on the actual UI flow.
+                new ChatRequest { Query = query, TopK = 10, SessionId = _activeConvId },
                 async evt =>
                 {
                     if (evt.Type == "sources")

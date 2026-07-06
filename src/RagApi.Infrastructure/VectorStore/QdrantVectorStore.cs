@@ -315,6 +315,12 @@ public class QdrantVectorStore : IVectorStore
     {
         try
         {
+            // Argha - 2026-07-06 - #112 - Qdrant's full-text Match.Text requires every tokenized word to
+            // be present (AND semantics), not a fuzzy/ranked match. Passing the raw question — full of
+            // stopwords like "what"/"who"/"is" that real content never contains — made this silently
+            // match nothing for any realistic question. Strip stopwords first.
+            var keywordQuery = StripStopwords(query);
+
             // Argha - 2026-02-20 - Add full-text match condition on 'content' field
             var conditions = new List<Condition>
             {
@@ -323,7 +329,7 @@ public class QdrantVectorStore : IVectorStore
                     Field = new FieldCondition
                     {
                         Key = "content",
-                        Match = new Match { Text = query }
+                        Match = new Match { Text = keywordQuery }
                     }
                 }
             };
@@ -388,6 +394,29 @@ public class QdrantVectorStore : IVectorStore
             _logger.LogError(ex, "Failed to perform keyword search in Qdrant collection {CollectionName}", collectionName);
             throw;
         }
+    }
+
+    // Argha - 2026-07-06 - #112 - Common English stopwords that essentially never appear as meaningful
+    // literal content in a document, but routinely appear in natural-language questions.
+    private static readonly HashSet<string> _stopwords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "a", "an", "the", "is", "are", "was", "were", "what", "who", "whom", "which", "that", "this",
+        "these", "those", "and", "or", "but", "of", "in", "on", "at", "to", "for", "with", "by", "from",
+        "about", "as", "it", "its", "be", "been", "being", "do", "does", "did", "will", "would",
+        "should", "could", "can", "may", "might", "i", "you", "he", "she", "they", "we"
+    };
+
+    // Argha - 2026-07-06 - #112 - Removes stopwords so Qdrant's AND-across-all-tokens full-text match
+    // only requires the meaningful content words to be present. Falls back to the original query if
+    // stripping empties it out (an all-stopword query, e.g. "what is it").
+    private static string StripStopwords(string query)
+    {
+        var meaningfulWords = query
+            .Split(new[] { ' ', '\t', '\n', '\r', ',', '.', '?', '!', ';', ':' }, StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => !_stopwords.Contains(w))
+            .ToList();
+
+        return meaningfulWords.Count > 0 ? string.Join(' ', meaningfulWords) : query;
     }
 
     // Argha - 2026-03-04 - #17 - collectionName replaces _config.CollectionName

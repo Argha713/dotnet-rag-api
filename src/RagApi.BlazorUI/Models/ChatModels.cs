@@ -5,7 +5,8 @@ namespace RagApi.BlazorUI.Models;
 public class ChatRequest
 {
     public string Query { get; set; } = string.Empty;
-    public int TopK { get; set; } = 5;
+    // Argha - 2026-07-06 - #112 - Keep in sync with RagApi.Api.Models.ChatRequest's default
+    public int TopK { get; set; } = 10;
     public Guid? SessionId { get; set; }
     public List<string>? Tags { get; set; }
 }
